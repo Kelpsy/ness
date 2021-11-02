@@ -9,7 +9,7 @@ env:
   CARGO_TERM_COLOR: always
   # `compile-shaders` shouldn't be enabled, as it requires building the entirety of shaderc from
   # source.
-  FEATURES: imgui-log,debug-views
+  FEATURES: log,debug-views
 
 jobs:
   run-clippy-and-test:

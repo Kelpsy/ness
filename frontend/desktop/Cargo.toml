@@ -5,14 +5,10 @@ edition = "2021"
 publish = false
 
 [features]
-default = ["debug-views", "imgui-log"]
+default = ["debug-views", "log"]
 
 debug-views = ["fxhash", "bitflags"]
-async-term-log = ["term-log", "slog-async"]
-term-log = ["log", "slog-term"]
-imgui-log = ["log"]
-
-log = ["slog", "ness-core/log"]
+log = ["slog", "slog-term", "slog-async", "ness-core/log"]
 
 compile-shaders = ["shaderc"]
 

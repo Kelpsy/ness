@@ -9,6 +9,13 @@ use std::{
 };
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LoggingKind {
+    Imgui,
+    Term,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum ModelConfig {
     Auto,
@@ -21,6 +28,7 @@ pub struct Global {
     pub model: ModelConfig,
     pub limit_framerate: bool,
     pub save_dir_path: PathBuf,
+    pub logging_kind: LoggingKind,
     pub window_size: (u32, u32),
 }
 
@@ -36,6 +44,7 @@ impl Default for Global {
                     .unwrap_or_else(|| PathBuf::from("/.local/share/ness")),
             }
             .join("saves"),
+            logging_kind: LoggingKind::Imgui,
             window_size: (1300, 800),
         }
     }

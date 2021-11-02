@@ -1,11 +1,11 @@
-#[cfg(feature = "imgui-log")]
+#[cfg(feature = "log")]
 mod imgui_log;
 #[allow(dead_code)]
 pub mod imgui_wgpu;
 pub mod window;
 
 use super::{
-    config::{self, Config, LaunchConfig},
+    config::{self, Config, LaunchConfig, LoggingKind},
     debug_views, emu, input, triple_buffer, FrameData,
 };
 use ness_core::{
@@ -23,21 +23,29 @@ use std::{
 };
 
 #[cfg(feature = "log")]
-fn init_logging(#[cfg(feature = "imgui-log")] tx: imgui_log::Sender) -> slog::Logger {
+fn init_logging(
+    imgui_log: &mut Option<(imgui_log::Console, imgui_log::Sender)>,
+    kind: LoggingKind,
+) -> slog::Logger {
     use slog::Drain;
-    #[cfg(feature = "imgui-log")]
-    {
-        slog::Logger::root(imgui_log::Drain::new(tx).fuse(), slog::o!())
-    }
-    #[cfg(feature = "term-log")]
-    {
-        let decorator = slog_term::TermDecorator::new().stdout().build();
-        let drain = slog_term::CompactFormat::new(decorator)
-            .use_custom_timestamp(|_: &mut dyn std::io::Write| Ok(()))
-            .build()
-            .fuse();
-        #[cfg(feature = "async-term-log")]
-        {
+    match kind {
+        LoggingKind::Imgui => {
+            let logger_tx = if let Some((_, logger_tx)) = imgui_log {
+                logger_tx.clone()
+            } else {
+                let (log_console, logger_tx) = imgui_log::Console::new(true);
+                *imgui_log = Some((log_console, logger_tx.clone()));
+                logger_tx
+            };
+            slog::Logger::root(imgui_log::Drain::new(logger_tx).fuse(), slog::o!())
+        }
+        LoggingKind::Term => {
+            *imgui_log = None;
+            let decorator = slog_term::TermDecorator::new().stdout().build();
+            let drain = slog_term::CompactFormat::new(decorator)
+                .use_custom_timestamp(|_: &mut dyn std::io::Write| Ok(()))
+                .build()
+                .fuse();
             slog::Logger::root(
                 slog_async::Async::new(drain)
                     .overflow_strategy(slog_async::OverflowStrategy::Block)
@@ -47,8 +55,6 @@ fn init_logging(#[cfg(feature = "imgui-log")] tx: imgui_log::Sender) -> slog::Lo
                 slog::o!(),
             )
         }
-        #[cfg(not(feature = "async-term-log"))]
-        slog::Logger::root(std::sync::Mutex::new(drain).fuse(), slog::o!())
     }
 }
 
@@ -62,8 +68,8 @@ struct UiState {
     screen_focused: bool,
     input: input::State,
 
-    #[cfg(feature = "imgui-log")]
-    console: imgui_log::Console,
+    #[cfg(feature = "log")]
+    imgui_log: Option<(imgui_log::Console, imgui_log::Sender)>,
     #[cfg(feature = "log")]
     logger: slog::Logger,
 
@@ -145,14 +151,6 @@ fn clear_fb_texture(id: imgui::TextureId, window: &mut window::Window) {
 }
 
 pub fn main() {
-    #[cfg(feature = "imgui-log")]
-    let (console, logger_tx) = imgui_log::Console::new(true);
-    #[cfg(feature = "log")]
-    let logger = init_logging(
-        #[cfg(feature = "imgui-log")]
-        logger_tx,
-    );
-
     let config_home = match env::var_os("XDG_CONFIG_HOME") {
         Some(config_dir) => Path::new(&config_dir).join("ness"),
         None => home::home_dir()
@@ -189,6 +187,11 @@ pub fn main() {
             }
         })
     };
+
+    #[cfg(feature = "log")]
+    let mut imgui_log = None;
+    #[cfg(feature = "log")]
+    let logger = init_logging(&mut imgui_log, global_config.contents.logging_kind);
 
     let mut window_builder = futures_executor::block_on(window::Builder::new("Ness", (1300, 800)));
 
@@ -247,8 +250,8 @@ pub fn main() {
             screen_focused: true,
             input: input::State::new(),
 
-            #[cfg(feature = "imgui-log")]
-            console,
+            #[cfg(feature = "log")]
+            imgui_log,
             #[cfg(feature = "log")]
             logger,
 
@@ -406,11 +409,11 @@ pub fn main() {
                 state.debug_views.render_menu_bar(ui, window);
             });
 
-            #[cfg(feature = "imgui-log")]
-            {
+            #[cfg(feature = "log")]
+            if let Some((console, _)) = &mut state.imgui_log {
                 let _window_padding = ui.push_style_var(imgui::StyleVar::WindowPadding([6.0; 2]));
                 let _item_spacing = ui.push_style_var(imgui::StyleVar::ItemSpacing([0.0; 2]));
-                state.console.render_window(ui, Some(window.mono_font));
+                console.render_window(ui, Some(window.mono_font));
             }
 
             #[cfg(feature = "debug-views")]

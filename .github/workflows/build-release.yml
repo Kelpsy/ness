@@ -7,9 +7,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  DEBUG_FEATURES: imgui-log,debug-views
-  # TODO: Maybe there should only be a "log" feature with a toggle between imgui and sync/async
-  # terminal output, locking the prebuilt binaries to only one of them seems too restrictive.
+  DEBUG_FEATURES: log,debug-views
 
 jobs:
   build:
