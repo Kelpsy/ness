@@ -1,0 +1,13 @@
+[workspace]
+members = [
+    "core",
+    "frontend/desktop",
+]
+resolver = "2"
+
+[profile.release]
+panic = "abort"
+debug = true
+
+[patch.crates-io]
+winit = { git = "https://github.com/emilk/winit", branch = "fix-native-file-dialogs" } # TODO: https://github.com/rust-windowing/winit/pull/2027
