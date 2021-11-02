@@ -4,9 +4,11 @@ mod imgui_log;
 pub mod imgui_wgpu;
 pub mod window;
 
+#[cfg(feature = "debug-views")]
+use super::debug_views;
 use super::{
     config::{self, Config, LaunchConfig, LoggingKind},
-    debug_views, emu, input, triple_buffer, FrameData,
+    emu, input, triple_buffer, FrameData,
 };
 use ness_core::{
     ppu::{FB_HEIGHT, FB_WIDTH, VIEW_HEIGHT_NTSC, VIEW_WIDTH},
