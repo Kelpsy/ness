@@ -23,28 +23,46 @@ jobs:
           - os: macos-latest
             artifact: macOS
     runs-on: ${{ matrix.os }}
+
     steps:
     - uses: actions/checkout@v2
+
     - name: Install nightly toolchain
       uses: actions-rs/toolchain@v1
       with:
-          toolchain: nightly
-          override: true
-          components: clippy
+        toolchain: nightly
+        override: true
+        components: clippy
+    
+    - name: Cache dependencies and build directory
+      uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/bin
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+          target/
+        key: ${{ matrix.os }}
+
     - name: Install GTK
       if: ${{ matrix.os == 'ubuntu-latest' }}
       run: sudo apt-get install libgtk-3-dev
+
     - name: Build release binary (no debugging features)
-      run: cargo build --release --verbose --no-default-features
+      run: cargo build --profile ci --verbose --no-default-features
+
     - name: Upload release binary (no debugging features)
       uses: actions/upload-artifact@v2
       with:
         name: ${{ matrix.artifact }}
-        path: target/release/ness-desktop${{ matrix.artifact-extension }}
+        path: target/ci/ness-desktop${{ matrix.artifact-extension }}
+
     - name: Build release binary (debugging features)
-      run: cargo build --release --verbose --features=${{ env.DEBUG_FEATURES }}
+      run: cargo build --profile ci --verbose --features=${{ env.DEBUG_FEATURES }}
+      
     - name: Upload release binary (debugging features)
       uses: actions/upload-artifact@v2
       with:
         name: ${{ matrix.artifact }}-debug
-        path: target/release/ness-desktop${{ matrix.artifact-extension }}
+        path: target/ci/ness-desktop${{ matrix.artifact-extension }}
