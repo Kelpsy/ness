@@ -1,9 +1,13 @@
+#![feature(drain_filter)]
+
 use serde::{Deserialize, Serialize};
 
 pub extern crate emu_utils as utils;
 
 pub mod emu;
 pub mod ppu;
+pub mod cpu;
+pub mod cart;
 
 bitflags::bitflags! {
     pub struct Keys: u16 {

@@ -13,7 +13,7 @@ macro_rules! error {
             .set_title($title)
             .set_description(&format!($($desc)*))
             .set_buttons(rfd::MessageButtons::Ok)
-            .show();
+            .show()
     };
 }
 

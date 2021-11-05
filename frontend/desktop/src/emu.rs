@@ -1,7 +1,7 @@
 #[cfg(feature = "debug-views")]
 use super::debug_views;
 use super::{config::LaunchConfig, input, triple_buffer, FrameData};
-use ness_core::{emu::Emu, utils::BoxedByteSlice, Model};
+use ness_core::{cart::Cart, emu::Emu, utils::BoxedByteSlice, Model};
 use std::{
     hint,
     time::{Duration, Instant},
@@ -18,14 +18,14 @@ pub enum Message {
 
 pub(super) fn main(
     config: LaunchConfig,
-    rom: BoxedByteSlice,
+    cart: Cart,
     mut frame_tx: triple_buffer::Sender<FrameData>,
     message_rx: crossbeam_channel::Receiver<Message>,
     #[cfg(feature = "log")] logger: slog::Logger,
 ) -> triple_buffer::Sender<FrameData> {
     let mut emu = Emu::new(
         config.model,
-        rom,
+        cart,
         #[cfg(feature = "log")]
         &logger,
     );

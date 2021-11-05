@@ -28,22 +28,29 @@ pub struct Global {
     pub model: ModelConfig,
     pub limit_framerate: bool,
     pub save_dir_path: PathBuf,
+
+    pub cart_db_path: PathBuf,
+    pub board_db_path: PathBuf,
     pub logging_kind: LoggingKind,
     pub window_size: (u32, u32),
 }
 
 impl Default for Global {
     fn default() -> Self {
+        let data_base = match env::var_os("XDG_DATA_HOME") {
+            Some(data_home) => Path::new(&data_home).join("ness"),
+            None => home::home_dir()
+                .map(|home| home.join(".local/share/ness"))
+                .unwrap_or_else(|| PathBuf::from("/.local/share/ness")),
+        };
+
         Global {
             model: ModelConfig::Auto,
             limit_framerate: true,
-            save_dir_path: match env::var_os("XDG_DATA_HOME") {
-                Some(data_dir) => Path::new(&data_dir).join("ness"),
-                None => home::home_dir()
-                    .map(|home| home.join(".local/share/ness"))
-                    .unwrap_or_else(|| PathBuf::from("/.local/share/ness")),
-            }
-            .join("saves"),
+            save_dir_path: data_base.join("saves"),
+
+            cart_db_path: data_base.join("db/carts.bml"),
+            board_db_path: data_base.join("db/boards.bml"),
             logging_kind: LoggingKind::Imgui,
             window_size: (1300, 800),
         }
