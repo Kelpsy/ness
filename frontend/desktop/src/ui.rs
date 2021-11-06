@@ -258,11 +258,11 @@ pub fn main() {
     macro_rules! read_db {
         ($config_field: ident, $name: literal) => {
             fs::read_to_string(&global_config.contents.$config_field).map_err(|err| {
-                error!(
+                warning!(
                     concat!("Couldn't read ", $name, " database"),
                     "Error reading database{}: {}",
                     if let Some(db_path_str) = global_config.contents.$config_field.to_str() {
-                        format!("at `{}`", db_path_str)
+                        format!(" at `{}`", db_path_str)
                     } else {
                         "".to_string()
                     },
@@ -346,7 +346,7 @@ pub fn main() {
             screen_focused: true,
             input: input::State::new(),
 
-            show_menu_bar: !global_config.contents.fullscreen_render,
+            show_menu_bar: true,
 
             #[cfg(feature = "log")]
             imgui_log,

@@ -1,3 +1,22 @@
+macro_rules! warning {
+    (yes_no, $title: expr, $($desc: tt)*) => {
+        rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Warning)
+            .set_title($title)
+            .set_description(&format!($($desc)*))
+            .set_buttons(rfd::MessageButtons::YesNo)
+            .show()
+    };
+    ($title: expr, $($desc: tt)*) => {
+        rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Warning)
+            .set_title($title)
+            .set_description(&format!($($desc)*))
+            .set_buttons(rfd::MessageButtons::Ok)
+            .show()
+    };
+}
+
 macro_rules! error {
     (yes_no, $title: expr, $($desc: tt)*) => {
         rfd::MessageDialog::new()
