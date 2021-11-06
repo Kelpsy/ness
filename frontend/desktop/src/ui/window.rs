@@ -20,7 +20,7 @@ pub struct GfxDeviceState {
 
 impl GfxDeviceState {
     pub async fn new(window: &WinitWindow) -> Self {
-        let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
+        let instance = wgpu::Instance::new(wgpu::Backends::all());
         let surface = unsafe { instance.create_surface(window) };
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {

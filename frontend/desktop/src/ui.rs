@@ -423,7 +423,7 @@ pub fn main() {
                     use core::fmt::Write;
 
                     if imgui::MenuItem::new(if state.playing { "Pause" } else { "Play" })
-                        .enabled(state.emu_shared_state.is_some())
+                        .enabled(state.emu_thread.is_some())
                         .build(ui)
                     {
                         let shared_state = state.emu_shared_state.as_mut().unwrap();

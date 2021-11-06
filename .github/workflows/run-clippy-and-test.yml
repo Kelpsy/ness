@@ -38,7 +38,7 @@ jobs:
           ~/.cargo/registry/cache
           ~/.cargo/git/db
           target/
-        key: ${{ matrix.os }}
+        key: ${{ matrix.os }}-clippy
 
     - name: Install GTK
       if: ${{ matrix.os == 'ubuntu-latest' }}
