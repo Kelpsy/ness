@@ -7,7 +7,7 @@ pub enum MakerCode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Country {
+pub enum Region {
     InternationalJapan,
     UsaCanada,
     EuropeOceaniaAsia,
@@ -88,7 +88,7 @@ pub struct Header {
     pub title: Option<String>,
     pub maker_code: Option<MakerCode>,
     pub game_code: Option<String>,
-    pub country: Country,
+    pub region: Region,
     pub version: u8,
     pub special_version: u8,
 
@@ -102,7 +102,7 @@ pub struct Header {
 }
 
 impl Header {
-    pub fn new(bytes: ByteSlice, expected_base_map_mode: BaseMapMode) -> Option<Self> {
+    pub fn new(bytes: ByteSlice, expected_base_map_mode: Option<BaseMapMode>) -> Option<Self> {
         let mut raw_chipset_sub_type = None;
 
         let mut raw_title = &bytes[0x10..0x25];
@@ -128,26 +128,26 @@ impl Header {
             }
         };
 
-        let country: Country = match bytes[0x29] {
-            0x00 => Country::InternationalJapan,
-            0x01 => Country::UsaCanada,
-            0x02 => Country::EuropeOceaniaAsia,
-            0x03 => Country::SwedenScandinavia,
-            0x04 => Country::Finland,
-            0x05 => Country::Denmark,
-            0x06 => Country::France,
-            0x07 => Country::Holland,
-            0x08 => Country::Spain,
-            0x09 => Country::GermanyAustriaSwitzerland,
-            0x0A => Country::Italy,
-            0x0B => Country::ChinaHongKong,
-            0x0C => Country::Indonesia,
-            0x0D => Country::SouthKorea,
-            0x0E => Country::Common,
-            0x0F => Country::Canada,
-            0x10 => Country::Brazil,
-            0x11 => Country::Australia,
-            other => Country::Unknown(other),
+        let region: Region = match bytes[0x29] {
+            0x00 => Region::InternationalJapan,
+            0x01 => Region::UsaCanada,
+            0x02 => Region::EuropeOceaniaAsia,
+            0x03 => Region::SwedenScandinavia,
+            0x04 => Region::Finland,
+            0x05 => Region::Denmark,
+            0x06 => Region::France,
+            0x07 => Region::Holland,
+            0x08 => Region::Spain,
+            0x09 => Region::GermanyAustriaSwitzerland,
+            0x0A => Region::Italy,
+            0x0B => Region::ChinaHongKong,
+            0x0C => Region::Indonesia,
+            0x0D => Region::SouthKorea,
+            0x0E => Region::Common,
+            0x0F => Region::Canada,
+            0x10 => Region::Brazil,
+            0x11 => Region::Australia,
+            other => Region::Unknown(other),
         };
 
         let version = bytes[0x2B];
@@ -221,8 +221,10 @@ impl Header {
             0xA => MapMode::HiRomSpc7110,
             _ => return None,
         };
-        if map_mode.base() != expected_base_map_mode {
-            return None;
+        if let Some(expected_base_map_mode) = expected_base_map_mode {
+            if map_mode.base() != expected_base_map_mode {
+                return None;
+            }
         }
         let fast_rom = rom_makeup & 0x10 != 0;
 
@@ -233,7 +235,7 @@ impl Header {
             title,
             maker_code,
             game_code,
-            country,
+            region,
             version,
             special_version,
 

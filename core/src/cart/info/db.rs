@@ -26,7 +26,7 @@ pub use boards::LoadError as BoardsLoadError;
 mod carts;
 pub use carts::LoadError as CartsLoadError;
 
-use super::info::{self, Info};
+use super::{Info, MapAddrRange, MapRegion};
 use core::fmt::{self, Display};
 use std::error::Error;
 
@@ -59,25 +59,27 @@ impl Db {
             boards: boards::load(boards_db).map_err(LoadError::Boards)?,
         })
     }
+}
 
-    pub fn cart_info(&self, hash: &[u8; 32]) -> Option<Info> {
-        let cart = self.carts.get(hash)?;
-        let board = self.boards.get(&cart.board)?;
+impl Info {
+    pub(super) fn from_db(db: &Db, hash: &[u8; 32]) -> Option<Info> {
+        let cart = db.carts.get(hash)?;
+        let board = db.boards.get(&cart.board)?;
 
         let mut rom_map = vec![];
         let mut ram_map = vec![];
-        for hardware in board.iter() {
+        for hardware in board {
             match hardware {
                 boards::Hardware::Rom {
                     content: boards::RomContent::Program,
                     map: db_map,
                 } => {
                     rom_map.extend(db_map.iter().map(|db_map_region| {
-                        info::MapRegion {
+                        MapRegion {
                             address_ranges: db_map_region
                                 .address_ranges
                                 .iter()
-                                .map(|db_addr_range| info::MapAddrRange {
+                                .map(|db_addr_range| MapAddrRange {
                                     addrs: db_addr_range.addrs,
                                     banks: db_addr_range.banks,
                                 })
@@ -93,11 +95,11 @@ impl Db {
                     map: db_map,
                 } => {
                     ram_map.extend(db_map.iter().map(|db_map_region| {
-                        info::MapRegion {
+                        MapRegion {
                             address_ranges: db_map_region
                                 .address_ranges
                                 .iter()
-                                .map(|db_addr_range| info::MapAddrRange {
+                                .map(|db_addr_range| MapAddrRange {
                                     addrs: db_addr_range.addrs,
                                     banks: db_addr_range.banks,
                                 })

@@ -13,8 +13,9 @@ use super::{
 use ness_core::{
     cart,
     ppu::{FB_HEIGHT, FB_WIDTH, VIEW_HEIGHT_NTSC, VIEW_WIDTH},
-    utils::{zeroed_box, BoxedByteSlice},
+    utils::{zeroed_box, BoxedByteSlice, ByteSlice},
 };
+use parking_lot::RwLock;
 use rfd::FileDialog;
 use std::{
     env,
@@ -22,7 +23,12 @@ use std::{
     io::{self, Read, Seek, SeekFrom},
     num::NonZeroU32,
     path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     thread,
+    time::Duration,
 };
 
 #[cfg(feature = "log")]
@@ -64,9 +70,10 @@ fn init_logging(
 struct UiState {
     global_config: Config<config::Global>,
     game_config: Option<Config<config::Game>>,
+    cart_db: Option<cart::info::db::Db>,
 
     playing: bool,
-    limit_framerate: bool,
+    limit_framerate: config::RuntimeModifiable<bool>,
 
     screen_focused: bool,
     input: input::State,
@@ -91,6 +98,7 @@ struct UiState {
     message_rx: crossbeam_channel::Receiver<emu::Message>,
 
     emu_thread: Option<thread::JoinHandle<triple_buffer::Sender<FrameData>>>,
+    emu_shared_state: Option<Arc<emu::SharedState>>,
 }
 
 impl UiState {
@@ -138,7 +146,7 @@ impl UiState {
             return;
         };
 
-        self.limit_framerate = config.limit_framerate.value;
+        self.limit_framerate = config.limit_framerate;
         #[cfg(feature = "xq-audio")]
         {
             self.audio.tx_active = true;
@@ -152,6 +160,15 @@ impl UiState {
         let frame_tx = self.frame_tx.take().unwrap();
         let message_rx = self.message_rx.clone();
 
+        self.playing = !config.pause_on_launch;
+        let emu_shared_state = Arc::new(emu::SharedState {
+            playing: AtomicBool::new(self.playing),
+            limit_framerate: AtomicBool::new(self.limit_framerate.value),
+            autosave_interval: RwLock::new(Duration::from_secs_f32(
+                config.autosave_interval_ms.value / 1000.0,
+            )),
+        });
+        self.emu_shared_state = Some(Arc::clone(&emu_shared_state));
         self.emu_thread = Some(
             thread::Builder::new()
                 .name("emulation".to_string())
@@ -161,6 +178,7 @@ impl UiState {
                         cart,
                         frame_tx,
                         message_rx,
+                        emu_shared_state,
                         #[cfg(feature = "log")]
                         logger,
                     )
@@ -174,7 +192,11 @@ impl UiState {
             self.send_message(emu::Message::Stop);
             self.frame_tx = Some(emu_thread.join().expect("Couldn't join emulation thread"));
         }
+        self.emu_shared_state = None;
         if let Some(mut game_config) = self.game_config.take() {
+            if let Some(dir_path) = game_config.path.as_ref().and_then(|p| p.parent()) {
+                let _ = fs::create_dir_all(dir_path);
+            }
             let _ = game_config.flush();
         }
         self.playing = false;
@@ -251,7 +273,7 @@ pub fn main() {
     let cart_db = read_db!(cart_db_path, "cart")
         .and_then(|carts| Ok((carts, read_db!(board_db_path, "board")?)))
         .and_then(|(carts, boards)| {
-            cart::db::Db::load(&carts, &boards).map_err(|err| {
+            cart::info::db::Db::load(&carts, &boards).map_err(|err| {
                 error!("Couldn't load cart database", "{}", err);
             })
         })
@@ -312,9 +334,12 @@ pub fn main() {
     window_builder.run(
         UiState {
             game_config: None,
+            cart_db,
 
             playing: false,
-            limit_framerate: global_config.contents.limit_framerate,
+            limit_framerate: config::RuntimeModifiable::global(
+                global_config.contents.limit_framerate,
+            ),
 
             screen_focused: true,
             input: input::State::new(),
@@ -339,6 +364,8 @@ pub fn main() {
             message_rx,
 
             emu_thread: None,
+            emu_shared_state: None,
+
             global_config,
         },
         |_, state, event| {
@@ -396,11 +423,12 @@ pub fn main() {
                     use core::fmt::Write;
 
                     if imgui::MenuItem::new(if state.playing { "Pause" } else { "Play" })
-                        .enabled(state.emu_thread.is_some())
+                        .enabled(state.emu_shared_state.is_some())
                         .build(ui)
                     {
+                        let shared_state = state.emu_shared_state.as_mut().unwrap();
                         state.playing = !state.playing;
-                        state.send_message(emu::Message::UpdatePlayingState(state.playing));
+                        shared_state.playing.store(state.playing, Ordering::Relaxed);
                     }
 
                     if imgui::MenuItem::new("Stop")
@@ -437,28 +465,30 @@ pub fn main() {
                                 rom
                             };
 
-                            let cart_info = cart_db
-                                .as_ref()
-                                .and_then(|db| {
-                                    let rom_hash = <sha2::Sha256 as sha2::Digest>::digest(&rom[..]);
-                                    db.cart_info(&rom_hash.into())
-                                })
-                                .or_else(|| {
+                            let (cart_info, cart_header, cart_info_source) = cart::info::Info::new(
+                                ByteSlice::new(&rom[..]),
+                                state.cart_db.as_ref().map(|db| {
+                                    (db, <sha2::Sha256 as sha2::Digest>::digest(&rom[..]).into())
+                                }),
+                            );
+
+                            match cart_info_source {
+                                cart::info::Source::Db => {}
+                                cart::info::Source::Guess => {
                                     #[cfg(feature = "log")]
                                     slog::warn!(
                                         state.logger,
                                         "Couldn't find cart in database, guessing info"
                                     );
-                                    cart::info::Info::guess(rom.as_byte_slice())
-                                })
-                                .unwrap_or_else(|| {
+                                }
+                                cart::info::Source::Default => {
                                     #[cfg(feature = "log")]
                                     slog::error!(
                                         state.logger,
                                         "Couldn't guess cart info, defaulting to LoROM"
                                     );
-                                    Default::default()
-                                });
+                                }
+                            }
 
                             let game_title = cart_info
                                 .title
@@ -472,9 +502,11 @@ pub fn main() {
                                 .to_string();
 
                             let game_config = {
+                                let mut config_path = config_home.join("games").join(&game_title);
+                                config_path.set_extension("json");
                                 let (config, save_config) =
                                     Config::<config::Game>::read_from_file_or_show_dialog(
-                                        &config_home.join("games").join(&game_title),
+                                        &config_path,
                                         &game_title,
                                     );
                                 config.unwrap_or_else(move || {
@@ -482,7 +514,7 @@ pub fn main() {
                                         Config {
                                             contents: config::Game::default(),
                                             dirty: true,
-                                            path: Some(path),
+                                            path: Some(config_path),
                                         }
                                     } else {
                                         Config::default()
@@ -493,6 +525,7 @@ pub fn main() {
                             match config::launch_config(
                                 &state.global_config.contents,
                                 &game_config.contents,
+                                cart_header.as_ref(),
                                 &game_title,
                             ) {
                                 Ok(launch_config) => {
@@ -513,20 +546,21 @@ pub fn main() {
                     }
 
                     if imgui::MenuItem::new("Limit framerate")
-                        .build_with_ref(ui, &mut state.limit_framerate)
+                        .build_with_ref(ui, &mut state.limit_framerate.value)
                     {
-                        if let Some(game_config) = &mut state.game_config {
-                            if let Some(limit_framerate) = &mut game_config.contents.limit_framerate
-                            {
-                                *limit_framerate = state.limit_framerate;
-                                game_config.dirty = true;
-                            }
+                        if state.limit_framerate.origin == config::SettingOrigin::Game {
+                            let game_config = state.game_config.as_mut().unwrap();
+                            game_config.contents.limit_framerate =
+                                Some(state.limit_framerate.value);
+                            game_config.dirty = true;
                         }
-                        state.global_config.contents.limit_framerate = state.limit_framerate;
+                        state.global_config.contents.limit_framerate = state.limit_framerate.value;
                         state.global_config.dirty = true;
-                        state.send_message(emu::Message::UpdateLimitFramerate(
-                            state.limit_framerate,
-                        ));
+                        if let Some(shared_state) = &state.emu_shared_state {
+                            shared_state
+                                .limit_framerate
+                                .store(state.limit_framerate.value, Ordering::Relaxed);
+                        }
                     }
                 });
                 #[cfg(feature = "debug-views")]

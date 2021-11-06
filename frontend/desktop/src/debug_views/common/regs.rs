@@ -4,6 +4,8 @@ use imgui::Ui;
 pub enum RegValue {
     Reg8(u8),
     Reg16(u16),
+    Reg16Split(u16),
+    Reg24Split(u8, u16),
     Reg32(u32),
 }
 
@@ -11,6 +13,7 @@ pub enum RegValue {
 pub enum MaxWidth {
     Reg8,
     Reg16,
+    Reg24,
     Reg32,
 }
 
@@ -28,10 +31,12 @@ pub fn regs<'a>(
     let style = ui.clone_style();
     let reg_8_bit_width = style.frame_padding[0] * 2.0 + ui.calc_text_size("00")[0];
     let reg_16_bit_width = reg_8_bit_width * 2.0 + spacing;
+    let reg_24_bit_width = reg_8_bit_width + spacing + reg_16_bit_width;
     let reg_32_bit_width = reg_16_bit_width * 2.0 + spacing;
     let max_width = match max_width {
         MaxWidth::Reg8 => reg_8_bit_width,
         MaxWidth::Reg16 => reg_16_bit_width,
+        MaxWidth::Reg24 => reg_24_bit_width,
         MaxWidth::Reg32 => reg_32_bit_width,
     };
     for cmd in cmds {
@@ -55,6 +60,36 @@ pub fn regs<'a>(
                         ui.same_line_with_spacing(0.0, 0.0);
                         ui.set_next_item_width(reg_16_bit_width);
                         ui.input_text(&format!("##{}", name), &mut format!("{:04X}", value))
+                            .read_only(true)
+                            .build();
+                    }
+                    RegValue::Reg16Split(value) => {
+                        ui.dummy([max_width - reg_16_bit_width, 0.0]);
+                        ui.set_next_item_width(reg_8_bit_width);
+                        ui.input_text(
+                            &format!("##{}_high", name),
+                            &mut format!("{:02X}", value >> 8),
+                        )
+                        .read_only(true)
+                        .build();
+                        ui.same_line_with_spacing(0.0, spacing);
+                        ui.set_next_item_width(reg_8_bit_width);
+                        ui.input_text(
+                            &format!("##{}_low", name),
+                            &mut format!("{:02X}", value as u8),
+                        )
+                        .read_only(true)
+                        .build();
+                    }
+                    RegValue::Reg24Split(high, low) => {
+                        ui.dummy([max_width - reg_24_bit_width, 0.0]);
+                        ui.set_next_item_width(reg_8_bit_width);
+                        ui.input_text(&format!("##{}_high", name), &mut format!("{:02X}", high))
+                            .read_only(true)
+                            .build();
+                        ui.same_line_with_spacing(0.0, spacing);
+                        ui.set_next_item_width(reg_16_bit_width);
+                        ui.input_text(&format!("##{}_low", name), &mut format!("{:04X}", low))
                             .read_only(true)
                             .build();
                     }

@@ -1,8 +1,12 @@
-use crate::{cart::Cart, cpu::Cpu, utils::BoxedByteSlice, Model};
+pub mod schedule;
+
+use crate::{cart::Cart, cpu::Cpu, Model};
+use schedule::Schedule;
 
 pub struct Emu {
     pub cpu: Cpu,
     pub cart: Cart,
+    pub schedule: Schedule,
 }
 
 impl Emu {
@@ -13,6 +17,7 @@ impl Emu {
                 logger.new(slog::o!("cpu" => "")),
             ),
             cart,
+            schedule: Schedule::new(),
         }
     }
 

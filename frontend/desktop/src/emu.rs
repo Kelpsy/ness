@@ -1,18 +1,29 @@
 #[cfg(feature = "debug-views")]
 use super::debug_views;
 use super::{config::LaunchConfig, input, triple_buffer, FrameData};
-use ness_core::{cart::Cart, emu::Emu, utils::BoxedByteSlice, Model};
+use ness_core::{cart::Cart, emu::Emu, Model};
+use parking_lot::RwLock;
 use std::{
     hint,
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 
+pub struct SharedState {
+    pub playing: AtomicBool,
+    pub limit_framerate: AtomicBool,
+    pub autosave_interval: RwLock<Duration>,
+}
+
 pub enum Message {
     UpdateInput(input::Changes),
+    UpdateSavePath(Option<PathBuf>),
     #[cfg(feature = "debug-views")]
     DebugViews(debug_views::Message),
-    UpdatePlayingState(bool),
-    UpdateLimitFramerate(bool),
     Stop,
 }
 
@@ -21,6 +32,7 @@ pub(super) fn main(
     cart: Cart,
     mut frame_tx: triple_buffer::Sender<FrameData>,
     message_rx: crossbeam_channel::Receiver<Message>,
+    shared_state: Arc<SharedState>,
     #[cfg(feature = "log")] logger: slog::Logger,
 ) -> triple_buffer::Sender<FrameData> {
     let mut emu = Emu::new(
@@ -30,14 +42,19 @@ pub(super) fn main(
         &logger,
     );
 
-    let mut playing = false;
-    let mut limit_framerate = config.limit_framerate.value;
-
+    let frame_interval = match config.model {
+        Model::Ntsc => Duration::from_nanos(1_000_000_000 / 60),
+        Model::Pal => Duration::from_nanos(1_000_000_000 / 50),
+    };
     let mut last_frame_time = Instant::now();
 
+    const FPS_CALC_INTERVAL: Duration = Duration::from_secs(1);
     let mut frames_since_last_fps_calc = 0;
     let mut last_fps_calc_time = last_frame_time;
     let mut fps = 0.0;
+
+    let mut cur_save_path = config.cur_save_path;
+    let mut last_save_flush_time = last_frame_time;
 
     #[cfg(feature = "debug-views")]
     let mut debug_views = debug_views::EmuState::new();
@@ -48,21 +65,21 @@ pub(super) fn main(
                 Message::UpdateInput(_changes) => {
                     // TODO: Emulator input
                 }
+                Message::UpdateSavePath(new_path) => {
+                    // TODO: Move/remove save file
+                    cur_save_path = new_path;
+                }
                 #[cfg(feature = "debug-views")]
                 Message::DebugViews(message) => {
                     debug_views.handle_message(message);
-                }
-                Message::UpdatePlayingState(new_playing) => {
-                    playing = new_playing;
-                }
-                Message::UpdateLimitFramerate(new_limit_framerate) => {
-                    limit_framerate = new_limit_framerate;
                 }
                 Message::Stop => {
                     break 'outer;
                 }
             }
         }
+
+        let playing = shared_state.playing.load(Ordering::Relaxed);
 
         let frame = frame_tx.start();
 
@@ -73,12 +90,6 @@ pub(super) fn main(
 
         #[cfg(feature = "debug-views")]
         debug_views.prepare_frame_data(&mut emu, &mut frame.debug);
-
-        let frame_interval = match config.model {
-            Model::Ntsc => Duration::from_nanos(1_000_000_000 / 60),
-            Model::Pal => Duration::from_nanos(1_000_000_000 / 50),
-        };
-        const FPS_CALC_INTERVAL: Duration = Duration::from_secs(1);
 
         frames_since_last_fps_calc += 1;
         let now = Instant::now();
@@ -92,7 +103,17 @@ pub(super) fn main(
 
         frame_tx.finish();
 
-        if limit_framerate || !playing {
+        if playing {
+            if let Some(_save_path) = &cur_save_path {
+                let now = Instant::now();
+                if now - last_save_flush_time >= *shared_state.autosave_interval.read() {
+                    last_save_flush_time = now;
+                    // TODO: Autosave
+                }
+            }
+        }
+
+        if !playing || shared_state.limit_framerate.load(Ordering::Relaxed) {
             let now = Instant::now();
             let elapsed = now - last_frame_time;
             if elapsed < frame_interval {

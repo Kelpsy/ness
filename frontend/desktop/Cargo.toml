@@ -30,6 +30,7 @@ slog-async = { version = "2.6", optional = true }
 rfd = "0.5"
 home = "0.5"
 sha2 = "0.9"
+parking_lot = "0.10"
 
 [build-dependencies]
 shaderc = { version = "0.7", optional = true }

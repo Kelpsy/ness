@@ -1,5 +1,7 @@
 #[allow(dead_code)]
 mod common;
+mod cpu_state;
+pub use cpu_state::CpuState;
 
 use super::ui::window::Window;
 use fxhash::FxHashMap;
@@ -9,11 +11,28 @@ use std::collections::hash_map::Entry;
 
 pub type ViewKey = u32;
 
-pub trait FrameDataSlot<T> {}
+pub trait FrameDataSlot<T> {
+    fn insert(self, value: T);
+}
 
-impl<'a, T> FrameDataSlot<T> for Entry<'a, ViewKey, T> {}
+impl<'a, T> FrameDataSlot<T> for Entry<'a, ViewKey, T> {
+    fn insert(self, value: T) {
+        match self {
+            Entry::Occupied(mut entry) => {
+                entry.insert(value);
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(value);
+            }
+        }
+    }
+}
 
-impl<T> FrameDataSlot<T> for &mut Option<T> {}
+impl<T> FrameDataSlot<T> for &mut Option<T> {
+    fn insert(self, value: T) {
+        *self = Some(value);
+    }
+}
 
 pub trait View {
     const NAME: &'static str;
@@ -48,7 +67,7 @@ macro_rules! declare_structs {
             $s_view_ty: ty,
             $s_toggle_updates_message_ident: ident,
             $s_update_emu_state_message_ident: ident
-        );*;
+        );*,
         instanceable
         $(
             $i_view_ident: ident,
@@ -126,14 +145,13 @@ macro_rules! declare_structs {
             ) {
                 $(
                     if let Some((emu_state, visible)) = &self.$s_view_ident {
-                        if !*visible {
-                            continue;
+                        if *visible {
+                            <$s_view_ty>::prepare_frame_data(
+                                emu_state,
+                                emu,
+                                &mut frame_data.$s_view_ident,
+                            );
                         }
-                        <$s_view_ty>::prepare_frame_data(
-                            emu_state,
-                            emu,
-                            &mut frame_data.$s_view_ident,
-                        );
                     } else {
                         frame_data.$s_view_ident = None;
                     }
@@ -206,11 +224,10 @@ macro_rules! declare_structs {
             pub fn update_from_frame_data(&mut self, frame_data: &FrameData, window: &mut Window) {
                 $(
                     if let Some((view, visible)) = &mut self.$s_view_ident {
-                        if !*visible {
-                            continue;
-                        }
-                        if let Some(frame_data) = &frame_data.$s_view_ident {
-                            view.update_from_frame_data(frame_data, window);
+                        if *visible {
+                            if let Some(frame_data) = &frame_data.$s_view_ident {
+                                view.update_from_frame_data(frame_data, window);
+                            }
                         }
                     }
                 )*
@@ -236,7 +253,7 @@ macro_rules! declare_structs {
                                 self.messages.push(Message::$s_update_emu_state_message_ident(
                                     None,
                                 ));
-                                view.destroy(window);
+                                view.0.destroy(window);
                             } else {
                                 let view = <$s_view_ty>::new(window);
                                 let emu_state = view.emu_state();
@@ -275,26 +292,23 @@ macro_rules! declare_structs {
                         let mut opened = true;
                         let was_visible = *visible;
                         let mut new_emu_state = None;
-                        imgui::Window::new(&format!("{}##{}", <$i_view_ty>::NAME, *key))
+                        imgui::Window::new(<$s_view_ty>::NAME)
                             .opened(&mut opened)
                             .build(ui, || {
                                 *visible = true;
                                 new_emu_state = view.render(ui, window, emu_running);
                             });
                         if let Some(new_emu_state) = new_emu_state {
-                            self.messages.push(Message::$i_update_emu_state_message_ident(
-                                *key,
+                            self.messages.push(Message::$s_update_emu_state_message_ident(
                                 Some(new_emu_state)
                             ));
                         } else if !opened {
-                            self.messages.push(Message::$i_update_emu_state_message_ident(
-                                *key,
+                            self.messages.push(Message::$s_update_emu_state_message_ident(
                                 None,
                             ));
                             self.$s_view_ident.take().unwrap().0.destroy(window);
                         } else if was_visible != !*visible {
-                            self.messages.push(Message::$i_toggle_updates_message_ident(
-                                *key,
+                            self.messages.push(Message::$s_toggle_updates_message_ident(
                                 *visible,
                             ));
                         }
@@ -342,4 +356,8 @@ macro_rules! declare_structs {
     };
 }
 
-declare_structs!(singletons; instanceable);
+declare_structs!(
+    singletons
+    cpu_state, CpuState, ToggleCpuStateUpdates, UpdateCpuStateEmuState,
+    instanceable
+);

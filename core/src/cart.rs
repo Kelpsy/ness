@@ -1,4 +1,3 @@
-pub mod db;
 pub mod info;
 mod map;
 
@@ -16,9 +15,8 @@ pub struct Cart {
 impl Cart {
     #[allow(clippy::single_match)]
     pub fn new(rom: BoxedByteSlice, ram: BoxedByteSlice, info: &Info) -> Option<Self> {
-        println!("{:?}", info);
         let mut map = Map::new();
-        for region in info.rom_map.iter() {
+        for region in &info.rom_map {
             let mut size = region.size.unwrap_or(rom.len() as u32);
             let offset = map::mirror(region.offset, size);
             size -= offset;
@@ -34,7 +32,7 @@ impl Cart {
                 );
             }
         }
-        for region in info.ram_map.iter() {
+        for region in &info.ram_map {
             let mut size = region.size.unwrap_or(info.ram_size);
             let offset = map::mirror(region.offset, size);
             size -= offset;

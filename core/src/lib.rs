@@ -27,7 +27,7 @@ bitflags::bitflags! {
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "kebab-case")]
 pub enum Model {
     Ntsc,
     Pal,
