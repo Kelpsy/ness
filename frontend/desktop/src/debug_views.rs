@@ -243,42 +243,40 @@ macro_rules! declare_structs {
                 )*
             }
 
-            pub fn render_menu_bar(&mut self, ui: &imgui::Ui, window: &mut Window) {
-                ui.menu("Debug", || {
-                    $(
-                        if MenuItem::new(<$s_view_ty>::NAME)
-                            .selected(self.$s_view_ident.is_some())
-                            .build(ui) {
-                            if let Some(view) = self.$s_view_ident.take() {
-                                self.messages.push(Message::$s_update_emu_state_message_ident(
-                                    None,
-                                ));
-                                view.0.destroy(window);
-                            } else {
-                                let view = <$s_view_ty>::new(window);
-                                let emu_state = view.emu_state();
-                                self.$s_view_ident = Some((view, true));
-                                self.messages.push(Message::$s_update_emu_state_message_ident(
-                                    Some(emu_state),
-                                ));
-                            }
-                        }
-                    )*
-                    ui.separator();
-                    $(
-                        if MenuItem::new(<$i_view_ty>::NAME).build(ui) {
-                            let key = self.$i_view_ident.1;
-                            self.$i_view_ident.1 += 1;
-                            let view = <$i_view_ty>::new(window);
+            pub fn render_menu(&mut self, ui: &imgui::Ui, window: &mut Window) {
+                $(
+                    if MenuItem::new(<$s_view_ty>::NAME)
+                        .selected(self.$s_view_ident.is_some())
+                        .build(ui) {
+                        if let Some(view) = self.$s_view_ident.take() {
+                            self.messages.push(Message::$s_update_emu_state_message_ident(
+                                None,
+                            ));
+                            view.0.destroy(window);
+                        } else {
+                            let view = <$s_view_ty>::new(window);
                             let emu_state = view.emu_state();
-                            self.$i_view_ident.0.insert(key, (view, true));
-                            self.messages.push(Message::$i_update_emu_state_message_ident(
-                                key,
+                            self.$s_view_ident = Some((view, true));
+                            self.messages.push(Message::$s_update_emu_state_message_ident(
                                 Some(emu_state),
                             ));
                         }
-                    )*
-                });
+                    }
+                )*
+                ui.separator();
+                $(
+                    if MenuItem::new(<$i_view_ty>::NAME).build(ui) {
+                        let key = self.$i_view_ident.1;
+                        self.$i_view_ident.1 += 1;
+                        let view = <$i_view_ty>::new(window);
+                        let emu_state = view.emu_state();
+                        self.$i_view_ident.0.insert(key, (view, true));
+                        self.messages.push(Message::$i_update_emu_state_message_ident(
+                            key,
+                            Some(emu_state),
+                        ));
+                    }
+                )*
             }
 
             pub fn render<'a>(

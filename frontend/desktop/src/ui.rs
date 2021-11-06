@@ -8,7 +8,7 @@ pub mod window;
 use super::debug_views;
 use super::{
     config::{self, Config, LaunchConfig, LoggingKind},
-    emu, input, triple_buffer, FrameData,
+    emu, input, triple_buffer, utils, FrameData,
 };
 use ness_core::{
     cart,
@@ -33,17 +33,17 @@ use std::{
 
 #[cfg(feature = "log")]
 fn init_logging(
-    imgui_log: &mut Option<(imgui_log::Console, imgui_log::Sender)>,
+    imgui_log: &mut Option<(imgui_log::Console, imgui_log::Sender, bool)>,
     kind: LoggingKind,
 ) -> slog::Logger {
     use slog::Drain;
     match kind {
         LoggingKind::Imgui => {
-            let logger_tx = if let Some((_, logger_tx)) = imgui_log {
+            let logger_tx = if let Some((_, logger_tx, _)) = imgui_log {
                 logger_tx.clone()
             } else {
                 let (log_console, logger_tx) = imgui_log::Console::new(true);
-                *imgui_log = Some((log_console, logger_tx.clone()));
+                *imgui_log = Some((log_console, logger_tx.clone(), false));
                 logger_tx
             };
             slog::Logger::root(imgui_log::Drain::new(logger_tx).fuse(), slog::o!())
@@ -75,11 +75,13 @@ struct UiState {
     playing: bool,
     limit_framerate: config::RuntimeModifiable<bool>,
 
+    show_menu_bar: bool,
+
     screen_focused: bool,
     input: input::State,
 
     #[cfg(feature = "log")]
-    imgui_log: Option<(imgui_log::Console, imgui_log::Sender)>,
+    imgui_log: Option<(imgui_log::Console, imgui_log::Sender, bool)>,
     #[cfg(feature = "log")]
     logger: slog::Logger,
 
@@ -344,6 +346,8 @@ pub fn main() {
             screen_focused: true,
             input: input::State::new(),
 
+            show_menu_bar: !global_config.contents.fullscreen_render,
+
             #[cfg(feature = "log")]
             imgui_log,
             #[cfg(feature = "log")]
@@ -418,157 +422,200 @@ pub fn main() {
                 }
             }
 
-            ui.main_menu_bar(|| {
-                ui.menu("Emulation", || {
-                    use core::fmt::Write;
+            if state.global_config.contents.fullscreen_render
+                && ui.is_key_pressed(imgui::Key::Escape)
+            {
+                state.show_menu_bar = !state.show_menu_bar;
+            }
 
-                    if imgui::MenuItem::new(if state.playing { "Pause" } else { "Play" })
-                        .enabled(state.emu_thread.is_some())
-                        .build(ui)
-                    {
-                        let shared_state = state.emu_shared_state.as_mut().unwrap();
-                        state.playing = !state.playing;
-                        shared_state.playing.store(state.playing, Ordering::Relaxed);
-                    }
+            if state.show_menu_bar {
+                ui.main_menu_bar(|| {
+                    ui.menu("Emulation", || {
+                        use core::fmt::Write;
 
-                    if imgui::MenuItem::new("Stop")
-                        .enabled(state.emu_thread.is_some())
-                        .build(ui)
-                    {
-                        state.stop();
-                        clear_fb_texture(state.fb_texture_id, window);
-                    }
-
-                    if imgui::MenuItem::new("Load game...").build(ui) {
-                        if let Some(path) = FileDialog::new()
-                            .add_filter("SNES ROM file", &["sfc", "smc", "bin"])
-                            .pick_file()
+                        if imgui::MenuItem::new(if state.playing { "Pause" } else { "Play" })
+                            .enabled(state.emu_thread.is_some())
+                            .build(ui)
                         {
-                            let rom = {
-                                let mut rom_file = File::open(&path)
-                                    .expect("Couldn't load the specified ROM file");
-                                let mut rom_len = rom_file
-                                    .metadata()
-                                    .expect("Couldn't get ROM file metadata")
-                                    .len()
-                                    as usize;
-                                if rom_len & 0x200 != 0 {
-                                    rom_len -= 0x200;
-                                    rom_file
-                                        .seek(SeekFrom::Start(0x200))
-                                        .expect("Couldn't seek in ROM file");
-                                }
-                                let mut rom = BoxedByteSlice::new_zeroed(rom_len);
-                                rom_file
-                                    .read_exact(&mut rom[..])
-                                    .expect("Couldn't read ROM file");
-                                rom
-                            };
+                            let shared_state = state.emu_shared_state.as_mut().unwrap();
+                            state.playing = !state.playing;
+                            shared_state.playing.store(state.playing, Ordering::Relaxed);
+                        }
 
-                            let (cart_info, cart_header, cart_info_source) = cart::info::Info::new(
-                                ByteSlice::new(&rom[..]),
-                                state.cart_db.as_ref().map(|db| {
-                                    (db, <sha2::Sha256 as sha2::Digest>::digest(&rom[..]).into())
-                                }),
-                            );
+                        if imgui::MenuItem::new("Stop")
+                            .enabled(state.emu_thread.is_some())
+                            .build(ui)
+                        {
+                            state.stop();
+                            clear_fb_texture(state.fb_texture_id, window);
+                        }
 
-                            match cart_info_source {
-                                cart::info::Source::Db => {}
-                                cart::info::Source::Guess => {
-                                    #[cfg(feature = "log")]
-                                    slog::warn!(
-                                        state.logger,
-                                        "Couldn't find cart in database, guessing info"
-                                    );
-                                }
-                                cart::info::Source::Default => {
-                                    #[cfg(feature = "log")]
-                                    slog::error!(
-                                        state.logger,
-                                        "Couldn't guess cart info, defaulting to LoROM"
-                                    );
-                                }
-                            }
-
-                            let game_title = cart_info
-                                .title
-                                .as_deref()
-                                .unwrap_or_else(|| {
-                                    path.file_name()
-                                        .unwrap()
-                                        .to_str()
-                                        .expect("Non-UTF-8 ROM filename provided")
-                                })
-                                .to_string();
-
-                            let game_config = {
-                                let mut config_path = config_home.join("games").join(&game_title);
-                                config_path.set_extension("json");
-                                let (config, save_config) =
-                                    Config::<config::Game>::read_from_file_or_show_dialog(
-                                        &config_path,
-                                        &game_title,
-                                    );
-                                config.unwrap_or_else(move || {
-                                    if save_config {
-                                        Config {
-                                            contents: config::Game::default(),
-                                            dirty: true,
-                                            path: Some(config_path),
-                                        }
-                                    } else {
-                                        Config::default()
+                        if imgui::MenuItem::new("Load game...").build(ui) {
+                            if let Some(path) = FileDialog::new()
+                                .add_filter("SNES ROM file", &["sfc", "smc", "bin"])
+                                .pick_file()
+                            {
+                                let rom = {
+                                    let mut rom_file = File::open(&path)
+                                        .expect("Couldn't load the specified ROM file");
+                                    let mut rom_len = rom_file
+                                        .metadata()
+                                        .expect("Couldn't get ROM file metadata")
+                                        .len()
+                                        as usize;
+                                    if rom_len & 0x200 != 0 {
+                                        rom_len -= 0x200;
+                                        rom_file
+                                            .seek(SeekFrom::Start(0x200))
+                                            .expect("Couldn't seek in ROM file");
                                     }
-                                })
-                            };
+                                    let mut rom = BoxedByteSlice::new_zeroed(rom_len);
+                                    rom_file
+                                        .read_exact(&mut rom[..])
+                                        .expect("Couldn't read ROM file");
+                                    rom
+                                };
 
-                            match config::launch_config(
-                                &state.global_config.contents,
-                                &game_config.contents,
-                                cart_header.as_ref(),
-                                &game_title,
-                            ) {
-                                Ok(launch_config) => {
-                                    state.game_config = Some(game_config);
-                                    state.start(launch_config, rom, cart_info);
-                                }
-                                Err(errors) => {
-                                    config_error!(
-                                        "Couldn't determine final configuration for game: {}",
-                                        errors.into_iter().fold(String::new(), |mut acc, err| {
-                                            let _ = write!(acc, "\n- {}", err);
-                                            acc
-                                        })
+                                let (cart_info, cart_header, cart_info_source) =
+                                    cart::info::Info::new(
+                                        ByteSlice::new(&rom[..]),
+                                        state.cart_db.as_ref().map(|db| {
+                                            (
+                                                db,
+                                                <sha2::Sha256 as sha2::Digest>::digest(&rom[..])
+                                                    .into(),
+                                            )
+                                        }),
                                     );
+
+                                match cart_info_source {
+                                    cart::info::Source::Db => {}
+                                    cart::info::Source::Guess => {
+                                        #[cfg(feature = "log")]
+                                        slog::warn!(
+                                            state.logger,
+                                            "Couldn't find cart in database, guessing info"
+                                        );
+                                    }
+                                    cart::info::Source::Default => {
+                                        #[cfg(feature = "log")]
+                                        slog::error!(
+                                            state.logger,
+                                            "Couldn't guess cart info, defaulting to LoROM"
+                                        );
+                                    }
+                                }
+
+                                let game_title = cart_info
+                                    .title
+                                    .as_deref()
+                                    .unwrap_or_else(|| {
+                                        path.file_name()
+                                            .unwrap()
+                                            .to_str()
+                                            .expect("Non-UTF-8 ROM filename provided")
+                                    })
+                                    .to_string();
+
+                                let game_config = {
+                                    let mut config_path =
+                                        config_home.join("games").join(&game_title);
+                                    config_path.set_extension("json");
+                                    let (config, save_config) =
+                                        Config::<config::Game>::read_from_file_or_show_dialog(
+                                            &config_path,
+                                            &game_title,
+                                        );
+                                    config.unwrap_or_else(move || {
+                                        if save_config {
+                                            Config {
+                                                contents: config::Game::default(),
+                                                dirty: true,
+                                                path: Some(config_path),
+                                            }
+                                        } else {
+                                            Config::default()
+                                        }
+                                    })
+                                };
+
+                                match config::launch_config(
+                                    &state.global_config.contents,
+                                    &game_config.contents,
+                                    cart_header.as_ref(),
+                                    &game_title,
+                                ) {
+                                    Ok(launch_config) => {
+                                        state.game_config = Some(game_config);
+                                        state.start(launch_config, rom, cart_info);
+                                    }
+                                    Err(errors) => {
+                                        config_error!(
+                                            "Couldn't determine final configuration for game: {}",
+                                            errors.into_iter().fold(
+                                                String::new(),
+                                                |mut acc, err| {
+                                                    let _ = write!(acc, "\n- {}", err);
+                                                    acc
+                                                }
+                                            )
+                                        );
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    if imgui::MenuItem::new("Limit framerate")
-                        .build_with_ref(ui, &mut state.limit_framerate.value)
-                    {
-                        if state.limit_framerate.origin == config::SettingOrigin::Game {
-                            let game_config = state.game_config.as_mut().unwrap();
-                            game_config.contents.limit_framerate =
-                                Some(state.limit_framerate.value);
-                            game_config.dirty = true;
+                        if imgui::MenuItem::new("Limit framerate")
+                            .build_with_ref(ui, &mut state.limit_framerate.value)
+                        {
+                            if state.limit_framerate.origin == config::SettingOrigin::Game {
+                                let game_config = state.game_config.as_mut().unwrap();
+                                game_config.contents.limit_framerate =
+                                    Some(state.limit_framerate.value);
+                                game_config.dirty = true;
+                            }
+                            state.global_config.contents.limit_framerate =
+                                state.limit_framerate.value;
+                            state.global_config.dirty = true;
+                            if let Some(shared_state) = &state.emu_shared_state {
+                                shared_state
+                                    .limit_framerate
+                                    .store(state.limit_framerate.value, Ordering::Relaxed);
+                            }
                         }
-                        state.global_config.contents.limit_framerate = state.limit_framerate.value;
-                        state.global_config.dirty = true;
-                        if let Some(shared_state) = &state.emu_shared_state {
-                            shared_state
-                                .limit_framerate
-                                .store(state.limit_framerate.value, Ordering::Relaxed);
+
+                        if imgui::MenuItem::new("Fullscreen render")
+                            .build_with_ref(ui, &mut state.global_config.contents.fullscreen_render)
+                        {
+                            state.global_config.dirty = true;
+                            state.show_menu_bar = !state.global_config.contents.fullscreen_render;
                         }
+                    });
+
+                    #[cfg(feature = "log")]
+                    let imgui_log_enabled = state.imgui_log.is_some();
+                    #[cfg(not(feature = "log"))]
+                    let imgui_log_enabled = false;
+                    if cfg!(feature = "debug-views") || imgui_log_enabled {
+                        ui.menu("Debug", || {
+                            #[cfg(feature = "log")]
+                            if let Some((_, _, console_visible)) = &mut state.imgui_log {
+                                imgui::MenuItem::new("Log").build_with_ref(ui, console_visible);
+                            }
+                            #[cfg(feature = "debug-views")]
+                            {
+                                if imgui_log_enabled {
+                                    ui.separator();
+                                }
+                                state.debug_views.render_menu(ui, window);
+                            }
+                        });
                     }
-                });
-                #[cfg(feature = "debug-views")]
-                state.debug_views.render_menu_bar(ui, window);
-            });
+                })
+            };
 
             #[cfg(feature = "log")]
-            if let Some((console, _)) = &mut state.imgui_log {
+            if let Some((console, _, true)) = &mut state.imgui_log {
                 let _window_padding = ui.push_style_var(imgui::StyleVar::WindowPadding([6.0; 2]));
                 let _item_spacing = ui.push_style_var(imgui::StyleVar::ItemSpacing([0.0; 2]));
                 console.render_window(ui, Some(window.mono_font));
@@ -585,45 +632,61 @@ pub fn main() {
                     .expect("Couldn't send UI message");
             }
 
-            let style = ui.clone_style();
-            let window_padding = ui.push_style_var(imgui::StyleVar::WindowPadding([0.0; 2]));
             let window_size = window.window.inner_size();
-            let titlebar_height = style.frame_padding[1] * 2.0 + ui.current_font_size();
-            const DEFAULT_SCALE: f32 = 2.0;
-            imgui::Window::new("Screen")
-                .size(
+            let aspect_ratio = VIEW_WIDTH as f32 / state.fb_view_height as f32;
+            let uv1 = [
+                state.fb_width as f32 / FB_WIDTH as f32,
+                state.fb_height as f32 / FB_HEIGHT as f32,
+            ];
+            if state.global_config.contents.fullscreen_render {
+                let ([x_base, y_base], [width, height]) = utils::scale_to_fit(
+                    aspect_ratio,
                     [
-                        VIEW_WIDTH as f32 * DEFAULT_SCALE,
-                        (VIEW_HEIGHT_NTSC * 2) as f32 * DEFAULT_SCALE + titlebar_height,
+                        (window_size.width as f64 / window.scale_factor) as f32,
+                        (window_size.height as f64 / window.scale_factor) as f32,
                     ],
-                    imgui::Condition::FirstUseEver,
-                )
-                .position(
-                    [
-                        (window_size.width as f64 * 0.5 / window.scale_factor) as f32,
-                        (window_size.height as f64 * 0.5 / window.scale_factor) as f32,
-                    ],
-                    imgui::Condition::FirstUseEver,
-                )
-                .position_pivot([0.5; 2])
-                .build(ui, || {
-                    let content_size = ui.content_region_avail();
-                    let aspect_ratio = VIEW_WIDTH as f32 / state.fb_view_height as f32;
-                    let width = (content_size[1] * aspect_ratio).min(content_size[0]);
-                    let height = width / aspect_ratio;
-                    ui.set_cursor_pos([
-                        (content_size[0] - width) * 0.5,
-                        titlebar_height + (content_size[1] - height) * 0.5,
-                    ]);
-                    imgui::Image::new(state.fb_texture_id, [width, height])
-                        .uv1([
-                            state.fb_width as f32 / FB_WIDTH as f32,
-                            state.fb_height as f32 / FB_HEIGHT as f32,
-                        ])
-                        .build(ui);
-                    state.screen_focused = ui.is_window_focused();
-                });
-            drop(window_padding);
+                );
+                ui.get_background_draw_list()
+                    .add_image(
+                        state.fb_texture_id,
+                        [x_base, y_base],
+                        [x_base + width, y_base + height],
+                    )
+                    .uv_max(uv1)
+                    .build();
+                state.screen_focused = !ui.is_any_item_focused();
+            } else {
+                let style = ui.clone_style();
+                let window_padding = ui.push_style_var(imgui::StyleVar::WindowPadding([0.0; 2]));
+                let titlebar_height = style.frame_padding[1] * 2.0 + ui.current_font_size();
+                const DEFAULT_SCALE: f32 = 2.0;
+                imgui::Window::new("Screen")
+                    .size(
+                        [
+                            VIEW_WIDTH as f32 * DEFAULT_SCALE,
+                            (VIEW_HEIGHT_NTSC * 2) as f32 * DEFAULT_SCALE + titlebar_height,
+                        ],
+                        imgui::Condition::FirstUseEver,
+                    )
+                    .position(
+                        [
+                            (window_size.width as f64 * 0.5 / window.scale_factor) as f32,
+                            (window_size.height as f64 * 0.5 / window.scale_factor) as f32,
+                        ],
+                        imgui::Condition::FirstUseEver,
+                    )
+                    .position_pivot([0.5; 2])
+                    .build(ui, || {
+                        let ([x_base, y_base], [width, height]) =
+                            utils::scale_to_fit(aspect_ratio, ui.content_region_avail());
+                        ui.set_cursor_pos([x_base, titlebar_height + y_base]);
+                        imgui::Image::new(state.fb_texture_id, [width, height])
+                            .uv1(uv1)
+                            .build(ui);
+                        state.screen_focused = ui.is_window_focused();
+                    });
+                drop(window_padding);
+            }
 
             window::ControlFlow::Continue
         },
