@@ -1,6 +1,6 @@
 use super::imgui_wgpu;
 use core::{iter, mem::ManuallyDrop};
-use std::time::Instant;
+use std::{path::PathBuf, time::Instant};
 use winit::{
     dpi::{LogicalSize, PhysicalSize},
     event::{Event, WindowEvent},
@@ -158,7 +158,11 @@ pub struct Builder {
 }
 
 impl Builder {
-    pub async fn new(title: impl Into<String>, default_logical_size: (u32, u32)) -> Self {
+    pub async fn new(
+        title: impl Into<String>,
+        default_logical_size: (u32, u32),
+        imgui_config_path: Option<PathBuf>,
+    ) -> Self {
         let event_loop = EventLoop::new();
         let window = WinitWindowBuilder::new()
             .with_title(title)
@@ -174,7 +178,7 @@ impl Builder {
 
         let mut imgui = imgui::Context::create();
 
-        // TODO: Allow configuring the imgui config filename?
+        imgui.set_ini_filename(imgui_config_path);
         imgui.io_mut().config_windows_move_from_title_bar_only = true;
 
         imgui.io_mut().font_global_scale = (1.0 / scale_factor) as f32;

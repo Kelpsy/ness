@@ -1,4 +1,4 @@
-#![feature(step_trait)]
+#![feature(step_trait, once_cell)]
 
 #[macro_use]
 mod utils;

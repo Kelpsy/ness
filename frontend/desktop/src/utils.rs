@@ -1,3 +1,9 @@
+use std::{
+    env,
+    path::{Path, PathBuf},
+    lazy::SyncLazy,
+};
+
 macro_rules! warning {
     (yes_no, $title: expr, $($desc: tt)*) => {
         rfd::MessageDialog::new()
@@ -55,4 +61,30 @@ pub fn scale_to_fit(aspect_ratio: f32, frame_size: [f32; 2]) -> ([f32; 2], [f32;
         ],
         [width, height],
     )
+}
+
+static CONFIG_BASE: SyncLazy<PathBuf> = SyncLazy::new(|| {
+    match env::var_os("XDG_CONFIG_HOME") {
+        Some(config_dir) => Path::new(&config_dir).join("ness"),
+        None => home::home_dir()
+            .map(|home| home.join(".config/ness"))
+            .unwrap_or_else(|| PathBuf::from("/.config/ness")),
+    }
+});
+
+static DATA_BASE: SyncLazy<PathBuf> = SyncLazy::new(|| {
+    match env::var_os("XDG_DATA_HOME") {
+        Some(data_home) => Path::new(&data_home).join("ness"),
+        None => home::home_dir()
+            .map(|home| home.join(".local/share/ness"))
+            .unwrap_or_else(|| PathBuf::from("/.local/share/ness")),
+    }
+});
+
+pub fn config_base<'a>() -> &'a Path {
+    &*CONFIG_BASE
+}
+
+pub fn data_base<'a>() -> &'a Path {
+    &*DATA_BASE
 }

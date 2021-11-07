@@ -4,10 +4,11 @@ use ness_core::{
     cart::info::header::{Header as CartHeader, Region},
     Model,
 };
+use super::utils::{config_base, data_base};
 use saves::{save_path, SavePathConfig};
 use serde::{Deserialize, Serialize};
 use std::{
-    env, fmt, fs, io,
+    fmt, fs, io,
     path::{Path, PathBuf},
 };
 
@@ -40,17 +41,13 @@ pub struct Global {
     pub board_db_path: PathBuf,
     pub logging_kind: LoggingKind,
     pub window_size: (u32, u32),
+    pub imgui_config_path: Option<PathBuf>,
 }
 
 impl Default for Global {
     fn default() -> Self {
-        let data_base = match env::var_os("XDG_DATA_HOME") {
-            Some(data_home) => Path::new(&data_home).join("ness"),
-            None => home::home_dir()
-                .map(|home| home.join(".local/share/ness"))
-                .unwrap_or_else(|| PathBuf::from("/.local/share/ness")),
-        };
-
+        let config_base = config_base();
+        let data_base = data_base();
         Global {
             model: ModelConfig::Auto,
             limit_framerate: true,
@@ -63,6 +60,7 @@ impl Default for Global {
             board_db_path: data_base.join("db/boards.bml"),
             logging_kind: LoggingKind::Imgui,
             window_size: (1300, 800),
+            imgui_config_path: Some(config_base.join("imgui.ini")),
         }
     }
 }

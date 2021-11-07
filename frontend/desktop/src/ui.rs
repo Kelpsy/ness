@@ -128,7 +128,7 @@ impl UiState {
                 Err(err) => match err.kind() {
                     io::ErrorKind::NotFound => None,
                     err => {
-                        error!("Couldn't read save RAM file", "{:?}", err);
+                        error!("Couldn't read save RAM file", "{:?}.", err);
                         None
                     }
                 },
@@ -143,18 +143,12 @@ impl UiState {
         } else {
             error!(
                 "Cart creation error",
-                "Couldn't create cart from the specified ROM and save RAM files"
+                "Couldn't create cart from the specified ROM and save RAM files."
             );
             return;
         };
 
         self.limit_framerate = config.limit_framerate;
-        #[cfg(feature = "xq-audio")]
-        {
-            self.audio.tx_active = true;
-            self.audio
-                .set_xq_sample_rate_shift(config.xq_audio_sample_rate_shift);
-        }
 
         #[cfg(feature = "log")]
         let logger = self.logger.clone();
@@ -286,7 +280,11 @@ pub fn main() {
     #[cfg(feature = "log")]
     let logger = init_logging(&mut imgui_log, global_config.contents.logging_kind);
 
-    let mut window_builder = futures_executor::block_on(window::Builder::new("Ness", (1300, 800)));
+    let mut window_builder = futures_executor::block_on(window::Builder::new(
+        "Ness",
+        (1300, 800),
+        global_config.contents.imgui_config_path.clone(),
+    ));
 
     let (frame_tx, frame_rx) = triple_buffer::init([
         FrameData::default(),
@@ -664,7 +662,7 @@ pub fn main() {
                     .size(
                         [
                             VIEW_WIDTH as f32 * DEFAULT_SCALE,
-                            (VIEW_HEIGHT_NTSC * 2) as f32 * DEFAULT_SCALE + titlebar_height,
+                            VIEW_HEIGHT_NTSC as f32 * DEFAULT_SCALE + titlebar_height,
                         ],
                         imgui::Condition::FirstUseEver,
                     )
