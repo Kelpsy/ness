@@ -2,6 +2,8 @@
 mod common;
 mod cpu_state;
 pub use cpu_state::CpuState;
+mod cpu_memory;
+pub use cpu_memory::CpuMemory;
 
 use super::ui::window::Window;
 use fxhash::FxHashMap;
@@ -11,11 +13,12 @@ use std::collections::hash_map::Entry;
 
 pub type ViewKey = u32;
 
-pub trait FrameDataSlot<T> {
+pub trait FrameDataSlot<'a, T> {
     fn insert(self, value: T);
+    fn get_or_insert_with(self, f: impl FnOnce() -> T) -> &'a mut T;
 }
 
-impl<'a, T> FrameDataSlot<T> for Entry<'a, ViewKey, T> {
+impl<'a, T> FrameDataSlot<'a, T> for Entry<'a, ViewKey, T> {
     fn insert(self, value: T) {
         match self {
             Entry::Occupied(mut entry) => {
@@ -26,11 +29,17 @@ impl<'a, T> FrameDataSlot<T> for Entry<'a, ViewKey, T> {
             }
         }
     }
+    fn get_or_insert_with(self, f: impl FnOnce() -> T) -> &'a mut T {
+        self.or_insert_with(f)
+    }
 }
 
-impl<T> FrameDataSlot<T> for &mut Option<T> {
+impl<'a, T> FrameDataSlot<'a, T> for &'a mut Option<T> {
     fn insert(self, value: T) {
         *self = Some(value);
+    }
+    fn get_or_insert_with(self, f: impl FnOnce() -> T) -> &'a mut T {
+        Option::get_or_insert_with(self, f)
     }
 }
 
@@ -44,10 +53,10 @@ pub trait View {
     fn destroy(self, window: &mut Window);
 
     fn emu_state(&self) -> Self::EmuState;
-    fn prepare_frame_data(
+    fn prepare_frame_data<'a, S: FrameDataSlot<'a, Self::FrameData>>(
         emu_state: &Self::EmuState,
         emu: &mut Emu,
-        frame_data: impl FrameDataSlot<Self::FrameData>,
+        frame_data: S,
     );
 
     fn update_from_frame_data(&mut self, frame_data: &Self::FrameData, window: &mut Window);
@@ -74,7 +83,7 @@ macro_rules! declare_structs {
             $i_view_ty: ty,
             $i_toggle_updates_message_ident: ident,
             $i_update_emu_state_message_ident: ident
-        );*$(;)?
+        );*$(,)?
     ) => {
         pub enum Message {
             $(
@@ -358,4 +367,5 @@ declare_structs!(
     singletons
     cpu_state, CpuState, ToggleCpuStateUpdates, UpdateCpuStateEmuState,
     instanceable
+    cpu_memory, CpuMemory, ToggleCpuMemoryUpdates, UpdateCpuMemoryEmuState,
 );

@@ -39,10 +39,10 @@ impl View for CpuState {
 
     fn emu_state(&self) -> Self::EmuState {}
 
-    fn prepare_frame_data(
+    fn prepare_frame_data<'a, S: FrameDataSlot<'a, Self::FrameData>>(
         _emu_state: &Self::EmuState,
         emu: &mut Emu,
-        frame_data: impl FrameDataSlot<Self::FrameData>,
+        frame_data: S,
     ) {
         frame_data.insert(RegValues {
             a: emu.cpu.regs.a,

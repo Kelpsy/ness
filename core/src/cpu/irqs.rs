@@ -32,7 +32,7 @@ impl Irqs {
         self.processing_irq = self.hv_timer_irq_requested && self.irqs_enabled;
         self.processing_exception = self.processing_irq || self.processing_nmi;
         if self.processing_exception {
-            schedule.target_timestamp = schedule.cur_timestamp;
+            schedule.target_time = schedule.cur_time;
         }
     }
 
@@ -78,7 +78,7 @@ impl Irqs {
     pub fn request_nmi(&mut self, schedule: &mut Schedule) {
         self.processing_nmi = true;
         self.processing_exception = true;
-        schedule.target_timestamp = schedule.cur_timestamp;
+        schedule.target_time = schedule.cur_time;
         self.waiting_for_exception = false;
     }
 

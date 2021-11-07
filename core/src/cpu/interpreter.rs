@@ -36,27 +36,30 @@ static INSTR_TABLE: [fn(&mut Emu); 0x800] =
 
 #[inline]
 pub fn run_until_next_event(emu: &mut Emu) {
-    if emu.cpu.stopped || emu.cpu.irqs.waiting_for_exception() {
-        emu.schedule.cur_timestamp +=
-            (emu.schedule.target_timestamp - emu.schedule.cur_timestamp + 5) / 6 * 6;
-        return;
-    }
-    if emu.cpu.irqs.processing_nmi() {
-        emu.cpu.irqs.acknowledge_nmi();
-        push(emu, emu.cpu.regs.code_bank());
-        push(emu, emu.cpu.regs.pc);
-        push(emu, emu.cpu.regs.psw.0);
-        jump_to_exc_vector(emu, 0xFFEA);
-    } else if emu.cpu.irqs.processing_irq() {
-        push(emu, emu.cpu.regs.code_bank());
-        push(emu, emu.cpu.regs.pc);
-        push(emu, emu.cpu.regs.psw.0);
-        jump_to_exc_vector(emu, 0xFFEE);
-    }
-    while emu.schedule.cur_timestamp < emu.schedule.target_timestamp {
-        let instr = consume_imm::<u8>(emu);
-        unsafe {
-            INSTR_TABLE.get_unchecked(instr as usize | emu.cpu.regs.psw_lut_base() as usize)(emu)
-        };
+    while emu.schedule.cur_time < emu.schedule.schedule.next_event_time() {
+        emu.schedule.target_time = emu.schedule.schedule.next_event_time();
+        if emu.cpu.stopped || emu.cpu.irqs.waiting_for_exception() {
+            emu.schedule.cur_time +=
+                (emu.schedule.target_time - emu.schedule.cur_time + 5) / 6 * 6;
+            return;
+        }
+        if emu.cpu.irqs.processing_nmi() {
+            emu.cpu.irqs.acknowledge_nmi();
+            push(emu, emu.cpu.regs.code_bank());
+            push(emu, emu.cpu.regs.pc);
+            push(emu, emu.cpu.regs.psw.0);
+            jump_to_exc_vector(emu, 0xFFEA);
+        } else if emu.cpu.irqs.processing_irq() {
+            push(emu, emu.cpu.regs.code_bank());
+            push(emu, emu.cpu.regs.pc);
+            push(emu, emu.cpu.regs.psw.0);
+            jump_to_exc_vector(emu, 0xFFEE);
+        }
+        while emu.schedule.cur_time < emu.schedule.target_time {
+            let instr = consume_imm::<u8>(emu);
+            unsafe {
+                INSTR_TABLE.get_unchecked(instr as usize | emu.cpu.regs.psw_lut_base() as usize)(emu)
+            };
+        }
     }
 }

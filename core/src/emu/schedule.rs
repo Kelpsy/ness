@@ -40,28 +40,28 @@ impl From<EventSlotIndex> for usize {
 }
 
 pub struct Schedule {
-    pub(crate) cur_timestamp: Timestamp,
-    pub(crate) target_timestamp: Timestamp,
+    pub(crate) cur_time: Timestamp,
+    pub(crate) target_time: Timestamp,
     pub(crate) schedule: schedule::Schedule<Timestamp, Event, EventSlotIndex, EVENT_SLOTS>,
 }
 
 impl Schedule {
     pub(super) fn new() -> Self {
         Schedule {
-            cur_timestamp: 0,
-            target_timestamp: 0,
+            cur_time: 0,
+            target_time: 0,
             schedule: schedule::Schedule::new(),
         }
     }
 
     #[inline]
     pub fn cur_timestamp(&self) -> Timestamp {
-        self.cur_timestamp
+        self.cur_time
     }
 
     #[inline]
     pub fn target_timestamp(&self) -> Timestamp {
-        self.target_timestamp
+        self.target_time
     }
 
     #[inline]
@@ -71,12 +71,16 @@ impl Schedule {
 
     pub(crate) fn schedule_event(&mut self, slot_index: EventSlotIndex, time: Timestamp) {
         self.schedule.schedule(slot_index, time);
-        if time < self.target_timestamp {
-            self.target_timestamp = time;
+        if time < self.target_time {
+            self.target_time = time;
         }
     }
 
+    pub(crate) fn pop_pending_event(&mut self) -> Option<(Event, Timestamp)> {
+        self.schedule.pop_pending_event(self.cur_time)
+    }
+
     pub(crate) fn forward_to_target(&mut self) {
-        self.cur_timestamp = self.target_timestamp;
+        self.cur_time = self.target_time;
     }
 }

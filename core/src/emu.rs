@@ -40,15 +40,11 @@ impl Emu {
             .schedule
             .set_event(event_slots::FRAME, Event::Frame);
         self.schedule
-            .schedule_event(event_slots::FRAME, self.schedule.cur_timestamp + 70_000_000);
+            .schedule_event(event_slots::FRAME, self.schedule.cur_time + 70_000);
         loop {
             Cpu::run_until_next_event(self);
             #[allow(clippy::never_loop)] // TODO: Remove
-            while let Some((event, _)) = self
-                .schedule
-                .schedule
-                .pop_pending_event(self.schedule.cur_timestamp)
-            {
+            while let Some((event, _)) = self.schedule.pop_pending_event() {
                 match event {
                     Event::Frame => return,
                 }
