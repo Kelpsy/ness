@@ -36,13 +36,22 @@ impl Emu {
     }
 
     pub fn run_frame(&mut self) {
-        self.schedule.set_event(event_slots::FRAME, Event::Frame);
         self.schedule
-            .schedule(event_slots::FRAME, self.cpu.cur_timestamp + 70_000_000);
-        Cpu::run_until_next_event(self);
-        while let Some((event, _)) = self.schedule.pop_pending_event(self.cpu.cur_timestamp) {
-            match event {
-                Event::Frame => {}
+            .schedule
+            .set_event(event_slots::FRAME, Event::Frame);
+        self.schedule
+            .schedule_event(event_slots::FRAME, self.schedule.cur_timestamp + 70_000_000);
+        loop {
+            Cpu::run_until_next_event(self);
+            #[allow(clippy::never_loop)] // TODO: Remove
+            while let Some((event, _)) = self
+                .schedule
+                .schedule
+                .pop_pending_event(self.schedule.cur_timestamp)
+            {
+                match event {
+                    Event::Frame => return,
+                }
             }
         }
     }

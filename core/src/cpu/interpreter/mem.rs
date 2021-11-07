@@ -149,7 +149,7 @@ pub(super) fn plp(emu: &mut Emu) {
     add_io_cycles(emu, 2);
     let result = pull::<u8>(emu);
     emu.cpu.regs.set_psw(Psw(result));
-    // TODO: Update IRQs enabled
+    emu.cpu.irqs.set_irqs_enabled(!emu.cpu.regs.psw.irqs_disabled(), &mut emu.schedule);
 }
 
 pub(super) fn plb(emu: &mut Emu) {

@@ -2,18 +2,18 @@ pub use super::super::common::{AddrMode, JumpAddr, RegSize};
 use crate::{cpu::bus, emu::schedule::Timestamp, emu::Emu};
 
 pub fn add_io_cycles(emu: &mut Emu, cycles: u8) {
-    emu.cpu.cur_timestamp += cycles as Timestamp * 6;
+    emu.schedule.cur_timestamp += cycles as Timestamp * 6;
 }
 
 pub fn read_8(emu: &mut Emu, addr: u32) -> u8 {
     let result = bus::read::<bus::CpuAccess>(emu, addr);
-    emu.cpu.cur_timestamp += 6; // TODO: Use real timings
+    emu.schedule.cur_timestamp += 6; // TODO: Use real timings
     result
 }
 
 pub fn write_8(emu: &mut Emu, addr: u32, value: u8) {
     bus::write::<bus::CpuAccess>(emu, addr, value);
-    emu.cpu.cur_timestamp += 6; // TODO: Use real timings
+    emu.schedule.cur_timestamp += 6; // TODO: Use real timings
 }
 
 pub fn read_16(emu: &mut Emu, addr: u32) -> u16 {

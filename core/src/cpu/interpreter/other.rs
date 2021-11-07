@@ -13,7 +13,7 @@ pub(super) fn sed(emu: &mut Emu) {
 
 pub(super) fn sei(emu: &mut Emu) {
     emu.cpu.regs.psw.set_irqs_disabled(true);
-    // TODO: Update IRQs enabled
+    emu.cpu.irqs.set_irqs_enabled(false, &mut emu.schedule);
 }
 
 pub(super) fn clc(emu: &mut Emu) {
@@ -28,7 +28,7 @@ pub(super) fn cld(emu: &mut Emu) {
 
 pub(super) fn cli(emu: &mut Emu) {
     emu.cpu.regs.psw.set_irqs_disabled(false);
-    // TODO: Update IRQs enabled
+    emu.cpu.irqs.set_irqs_enabled(true, &mut emu.schedule);
 }
 
 pub(super) fn clv(emu: &mut Emu) {
@@ -38,14 +38,14 @@ pub(super) fn clv(emu: &mut Emu) {
 pub(super) fn sep(emu: &mut Emu) {
     let mask = consume_imm::<u8>(emu);
     emu.cpu.regs.set_psw(Psw(emu.cpu.regs.psw.0 | mask));
-    // TODO: Update IRQs enabled
+    emu.cpu.irqs.set_irqs_enabled(!emu.cpu.regs.psw.irqs_disabled(), &mut emu.schedule);
     add_io_cycles(emu, 1);
 }
 
 pub(super) fn rep(emu: &mut Emu) {
     let mask = consume_imm::<u8>(emu);
     emu.cpu.regs.set_psw(Psw(emu.cpu.regs.psw.0 & !mask));
-    // TODO: Update IRQs enabled
+    emu.cpu.irqs.set_irqs_enabled(!emu.cpu.regs.psw.irqs_disabled(), &mut emu.schedule);
     add_io_cycles(emu, 1);
 }
 
@@ -61,7 +61,7 @@ pub(super) fn rti(emu: &mut Emu) {
     let new_pc = pull::<u16>(emu);
     let new_code_bank = pull::<u8>(emu);
     emu.cpu.regs.set_psw(Psw(new_psw));
-    // TODO: Update IRQs enabled
+    emu.cpu.irqs.set_irqs_enabled(!emu.cpu.regs.psw.irqs_disabled(), &mut emu.schedule);
     emu.cpu.regs.pc = new_pc;
     emu.cpu.regs.set_code_bank(new_code_bank);
 }
@@ -85,7 +85,8 @@ pub(super) fn nop(emu: &mut Emu) {
 }
 
 pub(super) fn wai(emu: &mut Emu) {
-    todo!("wai");
+    emu.cpu.irqs.set_waiting_for_exception(true);
+    emu.schedule.forward_to_target();
 }
 
 pub(super) fn cop(emu: &mut Emu) {

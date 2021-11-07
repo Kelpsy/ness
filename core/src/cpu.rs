@@ -1,7 +1,9 @@
-use crate::emu::{schedule::Timestamp, Emu};
+use crate::emu::Emu;
 
-pub mod regs;
 pub mod bus;
+mod irqs;
+pub mod regs;
+pub use irqs::Irqs;
 
 mod common;
 mod interpreter;
@@ -13,7 +15,7 @@ pub struct Cpu {
     logger: slog::Logger,
     pub regs: Regs,
     pub stopped: bool,
-    pub cur_timestamp: Timestamp,
+    pub irqs: Irqs,
 }
 
 impl Cpu {
@@ -23,7 +25,7 @@ impl Cpu {
             logger,
             regs: Regs::new(),
             stopped: false,
-            cur_timestamp: 0,
+            irqs: Irqs::new(),
         }
     }
 
@@ -31,6 +33,7 @@ impl Cpu {
         interpreter::soft_reset(emu);
     }
 
+    #[inline]
     pub(crate) fn run_until_next_event(emu: &mut Emu) {
         interpreter::run_until_next_event(emu)
     }

@@ -127,6 +127,7 @@ impl AddrMode {
     }
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JumpAddr {
     Absolute,             // #nnnn
