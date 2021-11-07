@@ -2,4 +2,3 @@
 /.cargo
 /target
 /Cargo.lock
-/imgui.ini

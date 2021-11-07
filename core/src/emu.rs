@@ -1,27 +1,49 @@
 pub mod schedule;
 
-use crate::{cart::Cart, cpu::Cpu, Model};
-use schedule::Schedule;
+use crate::{
+    cart::Cart,
+    cpu::Cpu,
+    utils::{zeroed_box, Bytes},
+    Model,
+};
+use schedule::{event_slots, Event, Schedule};
 
 pub struct Emu {
     pub cpu: Cpu,
     pub cart: Cart,
     pub schedule: Schedule,
+    pub wram: Box<Bytes<0x2_0000>>,
 }
 
 impl Emu {
     pub fn new(_model: Model, cart: Cart, #[cfg(feature = "log")] logger: &slog::Logger) -> Self {
-        Emu {
+        let mut emu = Emu {
             cpu: Cpu::new(
                 #[cfg(feature = "log")]
                 logger.new(slog::o!("cpu" => "")),
             ),
             cart,
             schedule: Schedule::new(),
-        }
+            wram: zeroed_box(),
+        };
+        emu.soft_reset();
+        emu
+    }
+
+    pub fn soft_reset(&mut self) {
+        // TODO: Reset other components
+        Cpu::soft_reset(self);
     }
 
     pub fn run_frame(&mut self) {
-        Cpu::run_frame(self);
+        self.schedule.set_event(event_slots::FRAME, Event::Frame);
+        self.schedule
+            .schedule(event_slots::FRAME, self.cpu.cur_timestamp + 70_000_000);
+        Cpu::run_until_next_event(self);
+        while let Some((event, _)) = self.schedule.pop_pending_event(self.cpu.cur_timestamp) {
+            match event {
+                Event::Frame => {}
+            }
+        }
     }
 }

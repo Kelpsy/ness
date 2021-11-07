@@ -7,18 +7,18 @@ pub type Timestamp = RawTimestamp;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Event {
-    Todo,
+    Frame,
 }
 
 impl Default for Event {
     fn default() -> Self {
-        Event::Todo
+        Event::Frame
     }
 }
 
 pub mod event_slots {
     use crate::utils::def_event_slots;
-    def_event_slots!(super::EventSlotIndex,);
+    def_event_slots!(super::EventSlotIndex, FRAME);
 }
 pub const EVENT_SLOTS: usize = event_slots::LEN;
 

@@ -26,6 +26,9 @@ pub struct Regs {
     emulation_mode: bool,
     code_bank: u8,
     data_bank: u8,
+    psw_lut_base: u16,
+    code_bank_base: u32,
+    data_bank_base: u32,
 }
 
 impl Regs {
@@ -41,6 +44,9 @@ impl Regs {
             emulation_mode: false,
             code_bank: 0,
             data_bank: 0,
+            psw_lut_base: 0,
+            code_bank_base: 0,
+            data_bank_base: 0,
         }
     }
 
@@ -52,10 +58,15 @@ impl Regs {
     #[inline]
     pub fn set_psw(&mut self, value: Psw) {
         self.psw = value;
+        self.psw_lut_base = (self.psw.0 as u16) << 5 & 0x700;
         if self.psw.index_regs_are_8_bit() {
             self.x &= 0xFF;
             self.y &= 0xFF;
         }
+    }
+
+    pub(crate) fn psw_lut_base(&self) -> u16 {
+        self.psw_lut_base
     }
 
     #[inline]
@@ -78,6 +89,7 @@ impl Regs {
     #[inline]
     pub fn set_code_bank(&mut self, value: u8) {
         self.code_bank = value;
+        self.code_bank_base = (value as u32) << 16;
     }
 
     #[inline]
@@ -88,5 +100,14 @@ impl Regs {
     #[inline]
     pub fn set_data_bank(&mut self, value: u8) {
         self.data_bank = value;
+        self.data_bank_base = (value as u32) << 16;
+    }
+
+    pub(crate) fn code_bank_base(&self) -> u32 {
+        self.code_bank_base
+    }
+
+    pub(crate) fn data_bank_base(&self) -> u32 {
+        self.data_bank_base
     }
 }

@@ -1,4 +1,4 @@
-#![feature(drain_filter)]
+#![feature(drain_filter, adt_const_params)]
 
 use serde::{Deserialize, Serialize};
 

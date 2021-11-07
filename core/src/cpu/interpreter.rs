@@ -1,5 +1,49 @@
-use crate::emu::Emu;
+mod common;
+use common::*;
 
-pub fn run_frame(_emu: &mut Emu) {
-    // TODO
+mod alu;
+use alu::*;
+mod branches;
+use branches::*;
+mod mem;
+use mem::*;
+mod other;
+use other::*;
+mod transfers;
+use transfers::*;
+
+use crate::emu::Emu;
+use common::jump_to_exc_vector;
+
+pub fn soft_reset(emu: &mut Emu) {
+    emu.cpu.stopped = false;
+    emu.cpu.regs.set_psw(
+        emu.cpu
+            .regs
+            .psw
+            .with_a_is_8_bit(true)
+            .with_index_regs_are_8_bit(true),
+    );
+    emu.cpu.regs.set_emulation_mode::<true>(true);
+    emu.cpu.regs.direct_page_offset = 0;
+    emu.cpu.regs.sp = 0x100 | (emu.cpu.regs.sp & 0xFF);
+    emu.cpu.regs.set_data_bank(0);
+    jump_to_exc_vector(emu, 0xFFFC);
+}
+
+static INSTR_TABLE: [fn(&mut Emu); 0x800] =
+    include!(concat!(env!("OUT_DIR"), "/instr_table_65c816.rs"));
+
+pub fn run_until_next_event(emu: &mut Emu) {
+    while emu.cpu.cur_timestamp < emu.schedule.next_event_time() {
+        if emu.cpu.stopped {
+            emu.cpu.cur_timestamp +=
+                (emu.schedule.next_event_time() - emu.cpu.cur_timestamp + 5) / 6 * 6;
+            break;
+        }
+        let instr = consume_imm::<u8>(emu);
+        unsafe {
+            INSTR_TABLE.get_unchecked(instr as usize | emu.cpu.regs.psw_lut_base() as usize)(emu)
+        };
+    }
 }
