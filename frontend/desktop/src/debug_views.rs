@@ -4,6 +4,8 @@ mod cpu_state;
 pub use cpu_state::CpuState;
 mod cpu_memory;
 pub use cpu_memory::CpuMemory;
+mod cpu_disasm;
+pub use cpu_disasm::CpuDisasm;
 
 use super::ui::window::Window;
 use fxhash::FxHashMap;
@@ -60,6 +62,11 @@ pub trait View {
     );
 
     fn update_from_frame_data(&mut self, frame_data: &Self::FrameData, window: &mut Window);
+    fn customize_window<'a, T: AsRef<str>>(
+        &mut self,
+        ui: &imgui::Ui,
+        window: imgui::Window<'a, T>,
+    ) -> imgui::Window<'a, T>;
     fn render(
         &mut self,
         ui: &imgui::Ui,
@@ -70,20 +77,20 @@ pub trait View {
 
 macro_rules! declare_structs {
     (
-        singletons
         $(
+            singleton
             $s_view_ident: ident,
             $s_view_ty: ty,
             $s_toggle_updates_message_ident: ident,
             $s_update_emu_state_message_ident: ident
-        );*,
-        instanceable
+        );*$(;)?
         $(
+            instanceable
             $i_view_ident: ident,
             $i_view_ty: ty,
             $i_toggle_updates_message_ident: ident,
             $i_update_emu_state_message_ident: ident
-        );*$(,)?
+        );*$(;)?
     ) => {
         pub enum Message {
             $(
@@ -299,12 +306,13 @@ macro_rules! declare_structs {
                         let mut opened = true;
                         let was_visible = *visible;
                         let mut new_emu_state = None;
-                        imgui::Window::new(<$s_view_ty>::NAME)
-                            .opened(&mut opened)
-                            .build(ui, || {
-                                *visible = true;
-                                new_emu_state = view.render(ui, window, emu_running);
-                            });
+                        view.customize_window(
+                            ui,
+                            imgui::Window::new(<$s_view_ty>::NAME).opened(&mut opened)
+                        ).build(ui, || {
+                            *visible = true;
+                            new_emu_state = view.render(ui, window, emu_running);
+                        });
                         if let Some(new_emu_state) = new_emu_state {
                             self.messages.push(Message::$s_update_emu_state_message_ident(
                                 Some(new_emu_state)
@@ -327,12 +335,14 @@ macro_rules! declare_structs {
                             let mut opened = true;
                             let was_visible = *visible;
                             let mut new_emu_state = None;
-                            imgui::Window::new(&format!("{}##{}", <$i_view_ty>::NAME, *key))
-                                .opened(&mut opened)
-                                .build(ui, || {
-                                    *visible = true;
-                                    new_emu_state = view.render(ui, window, emu_running);
-                                });
+                            view.customize_window(
+                                ui,
+                                imgui::Window::new(&format!("{}##{}", <$i_view_ty>::NAME, *key))
+                                    .opened(&mut opened),
+                            ).build(ui, || {
+                                *visible = true;
+                                new_emu_state = view.render(ui, window, emu_running);
+                            });
                             if let Some(new_emu_state) = new_emu_state {
                                 self.messages.push(Message::$i_update_emu_state_message_ident(
                                     *key,
@@ -364,8 +374,7 @@ macro_rules! declare_structs {
 }
 
 declare_structs!(
-    singletons
-    cpu_state, CpuState, ToggleCpuStateUpdates, UpdateCpuStateEmuState,
-    instanceable
-    cpu_memory, CpuMemory, ToggleCpuMemoryUpdates, UpdateCpuMemoryEmuState,
+    singleton cpu_state, CpuState, ToggleCpuStateUpdates, UpdateCpuStateEmuState;
+    instanceable cpu_memory, CpuMemory, ToggleCpuMemoryUpdates, UpdateCpuMemoryEmuState;
+    instanceable cpu_disasm, CpuDisasm, ToggleCpuDisasmUpdates, UpdateCpuDisasmEmuState;
 );

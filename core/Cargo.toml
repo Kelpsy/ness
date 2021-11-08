@@ -6,6 +6,7 @@ publish = false
 
 [features]
 log = ["slog"]
+disasm = []
 
 [dependencies]
 emu-utils = { git = "https://github.com/Kelpsy/emu-utils" }

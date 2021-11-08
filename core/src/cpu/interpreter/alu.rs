@@ -120,38 +120,38 @@ fn do_ror<T: RegSize>(emu: &mut Emu, src: T) -> T {
     }
 }
 
-pub(super) fn lda<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
+pub fn lda<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     let result = do_addr_mode_read::<I, A, ADDR>(emu);
     result.update_u16_low(&mut emu.cpu.regs.a);
     set_nz(emu, result);
 }
 
-pub(super) fn sta<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
+pub fn sta<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     do_addr_mode_write::<I, A, ADDR>(emu, A::trunc_u16(emu.cpu.regs.a));
 }
 
-pub(super) fn ora<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
+pub fn ora<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     let operand = do_addr_mode_read::<I, A, ADDR>(emu);
     let result = A::trunc_u16(emu.cpu.regs.a) | operand;
     result.update_u16_low(&mut emu.cpu.regs.a);
     set_nz(emu, result);
 }
 
-pub(super) fn and<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
+pub fn and<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     let operand = do_addr_mode_read::<I, A, ADDR>(emu);
     let result = A::trunc_u16(emu.cpu.regs.a) & operand;
     result.update_u16_low(&mut emu.cpu.regs.a);
     set_nz(emu, result);
 }
 
-pub(super) fn eor<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
+pub fn eor<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     let operand = do_addr_mode_read::<I, A, ADDR>(emu);
     let result = A::trunc_u16(emu.cpu.regs.a) ^ operand;
     result.update_u16_low(&mut emu.cpu.regs.a);
     set_nz(emu, result);
 }
 
-pub(super) fn adc<A: RegSize, I: RegSize, const ADDR: AddrMode, const DECIMAL: bool>(
+pub fn adc<A: RegSize, I: RegSize, const ADDR: AddrMode, const DECIMAL: bool>(
     emu: &mut Emu,
 ) {
     let operand = do_addr_mode_read::<I, A, ADDR>(emu);
@@ -162,7 +162,7 @@ pub(super) fn adc<A: RegSize, I: RegSize, const ADDR: AddrMode, const DECIMAL: b
     }
 }
 
-pub(super) fn sbc<A: RegSize, I: RegSize, const ADDR: AddrMode, const DECIMAL: bool>(
+pub fn sbc<A: RegSize, I: RegSize, const ADDR: AddrMode, const DECIMAL: bool>(
     emu: &mut Emu,
 ) {
     let operand = do_addr_mode_read::<I, A, ADDR>(emu);
@@ -173,59 +173,59 @@ pub(super) fn sbc<A: RegSize, I: RegSize, const ADDR: AddrMode, const DECIMAL: b
     }
 }
 
-pub(super) fn cmp<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
+pub fn cmp<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     do_compare::<I, A, ADDR>(emu, emu.cpu.regs.a);
 }
 
-pub(super) fn inc_a<A: RegSize>(emu: &mut Emu) {
+pub fn inc_a<A: RegSize>(emu: &mut Emu) {
     do_inc(emu, A::trunc_u16(emu.cpu.regs.a)).update_u16_low(&mut emu.cpu.regs.a);
 }
 
-pub(super) fn inc<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
+pub fn inc<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     do_rmw::<_, I, A, ADDR>(emu, do_inc);
 }
 
-pub(super) fn dec_a<A: RegSize>(emu: &mut Emu) {
+pub fn dec_a<A: RegSize>(emu: &mut Emu) {
     do_dec(emu, A::trunc_u16(emu.cpu.regs.a)).update_u16_low(&mut emu.cpu.regs.a);
 }
 
-pub(super) fn dec<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
+pub fn dec<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     do_rmw::<_, I, A, ADDR>(emu, do_dec);
 }
 
-pub(super) fn asl_a<A: RegSize>(emu: &mut Emu) {
+pub fn asl_a<A: RegSize>(emu: &mut Emu) {
     do_asl(emu, A::trunc_u16(emu.cpu.regs.a)).update_u16_low(&mut emu.cpu.regs.a);
 }
 
-pub(super) fn asl<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
+pub fn asl<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     do_rmw::<_, I, A, ADDR>(emu, do_asl);
 }
 
-pub(super) fn lsr_a<A: RegSize>(emu: &mut Emu) {
+pub fn lsr_a<A: RegSize>(emu: &mut Emu) {
     do_lsr(emu, A::trunc_u16(emu.cpu.regs.a)).update_u16_low(&mut emu.cpu.regs.a);
 }
 
-pub(super) fn lsr<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
+pub fn lsr<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     do_rmw::<_, I, A, ADDR>(emu, do_lsr);
 }
 
-pub(super) fn rol_a<A: RegSize>(emu: &mut Emu) {
+pub fn rol_a<A: RegSize>(emu: &mut Emu) {
     do_rol(emu, A::trunc_u16(emu.cpu.regs.a)).update_u16_low(&mut emu.cpu.regs.a);
 }
 
-pub(super) fn rol<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
+pub fn rol<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     do_rmw::<_, I, A, ADDR>(emu, do_rol);
 }
 
-pub(super) fn ror_a<A: RegSize>(emu: &mut Emu) {
+pub fn ror_a<A: RegSize>(emu: &mut Emu) {
     do_ror(emu, A::trunc_u16(emu.cpu.regs.a)).update_u16_low(&mut emu.cpu.regs.a);
 }
 
-pub(super) fn ror<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
+pub fn ror<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     do_rmw::<_, I, A, ADDR>(emu, do_ror);
 }
 
-pub(super) fn bit<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
+pub fn bit<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     let operand = do_addr_mode_read::<I, A, ADDR>(emu);
     let result = A::trunc_u16(emu.cpu.regs.a) & operand;
     emu.cpu.regs.psw.set_zero(result.is_zero());
@@ -239,7 +239,7 @@ pub(super) fn bit<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     }
 }
 
-pub(super) fn tsb<A: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
+pub fn tsb<A: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     do_rmw::<_, u8, A, ADDR>(emu, |emu, value| {
         add_io_cycles(emu, 1);
         let a = A::trunc_u16(emu.cpu.regs.a);
@@ -248,7 +248,7 @@ pub(super) fn tsb<A: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     });
 }
 
-pub(super) fn trb<A: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
+pub fn trb<A: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     do_rmw::<_, u8, A, ADDR>(emu, |emu, value| {
         add_io_cycles(emu, 1);
         let a = A::trunc_u16(emu.cpu.regs.a);
@@ -257,26 +257,26 @@ pub(super) fn trb<A: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     });
 }
 
-pub(super) fn cpx<I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
+pub fn cpx<I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     do_compare::<I, I, ADDR>(emu, emu.cpu.regs.x);
 }
 
-pub(super) fn cpy<I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
+pub fn cpy<I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     do_compare::<I, I, ADDR>(emu, emu.cpu.regs.y);
 }
 
-pub(super) fn inx<I: RegSize>(emu: &mut Emu) {
+pub fn inx<I: RegSize>(emu: &mut Emu) {
     emu.cpu.regs.x = do_inc(emu, I::trunc_u16(emu.cpu.regs.x)).as_zext_u16();
 }
 
-pub(super) fn iny<I: RegSize>(emu: &mut Emu) {
+pub fn iny<I: RegSize>(emu: &mut Emu) {
     emu.cpu.regs.y = do_inc(emu, I::trunc_u16(emu.cpu.regs.y)).as_zext_u16();
 }
 
-pub(super) fn dex<I: RegSize>(emu: &mut Emu) {
+pub fn dex<I: RegSize>(emu: &mut Emu) {
     emu.cpu.regs.x = do_dec(emu, I::trunc_u16(emu.cpu.regs.x)).as_zext_u16();
 }
 
-pub(super) fn dey<I: RegSize>(emu: &mut Emu) {
+pub fn dey<I: RegSize>(emu: &mut Emu) {
     emu.cpu.regs.y = do_dec(emu, I::trunc_u16(emu.cpu.regs.y)).as_zext_u16();
 }

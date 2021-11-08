@@ -9,21 +9,21 @@ fn do_cond_branch(emu: &mut Emu, cond: impl FnOnce(Psw) -> bool) {
     }
 }
 
-pub(super) fn bra(emu: &mut Emu) {
+pub fn bra(emu: &mut Emu) {
     do_cond_branch(emu, |_| true);
 }
 
-pub(super) fn b_cond<const BIT: u8, const SET: bool>(emu: &mut Emu) {
+pub fn b_cond<const BIT: u8, const SET: bool>(emu: &mut Emu) {
     do_cond_branch(emu, |psw| (psw.0 & 1 << BIT != 0) == SET);
 }
 
-pub(super) fn brl(emu: &mut Emu) {
+pub fn brl(emu: &mut Emu) {
     let offset = consume_imm::<u16>(emu) as i16;
     add_io_cycles(emu, 1);
     emu.cpu.regs.pc = emu.cpu.regs.pc.wrapping_add(offset as u16);
 }
 
-pub(super) fn jmp<const SUBROUTINE: bool, const ADDR: JumpAddr>(emu: &mut Emu) {
+pub fn jmp<const SUBROUTINE: bool, const ADDR: JumpAddr>(emu: &mut Emu) {
     match ADDR {
         JumpAddr::Absolute => {
             let new_pc = consume_imm::<u16>(emu);
@@ -81,14 +81,14 @@ pub(super) fn jmp<const SUBROUTINE: bool, const ADDR: JumpAddr>(emu: &mut Emu) {
     }
 }
 
-pub(super) fn rts(emu: &mut Emu) {
+pub fn rts(emu: &mut Emu) {
     add_io_cycles(emu, 2);
     let new_pc = pull::<u16>(emu).wrapping_add(1);
     add_io_cycles(emu, 1);
     emu.cpu.regs.pc = new_pc;
 }
 
-pub(super) fn rtl(emu: &mut Emu) {
+pub fn rtl(emu: &mut Emu) {
     add_io_cycles(emu, 2);
     let new_pc = pull::<u16>(emu).wrapping_add(1);
     let new_code_bank = pull::<u8>(emu);

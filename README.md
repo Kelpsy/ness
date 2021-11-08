@@ -1,5 +1,7 @@
 # Ness
 
+![Screenshot](screenshot.png)
+
 [![Build and test status](https://github.com/Kelpsy/ness/actions/workflows/.github/workflows/run-clippy-and-test.yml/badge.svg?branch=main&event=push)](https://github.com/Kelpsy/ness/actions/workflows/run-clippy-and-test.yml?query=branch%3Amain+event%3Apush)
 
 ## Prebuilt binaries

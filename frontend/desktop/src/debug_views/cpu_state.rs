@@ -62,6 +62,14 @@ impl View for CpuState {
         self.reg_values = Some(frame_data.clone());
     }
 
+    fn customize_window<'a, T: AsRef<str>>(
+        &mut self,
+        _ui: &imgui::Ui,
+        window: imgui::Window<'a, T>,
+    ) -> imgui::Window<'a, T> {
+        window
+    }
+
     fn render(
         &mut self,
         ui: &imgui::Ui,

@@ -6,7 +6,6 @@ use crate::ui::window::Window;
 use ness_core::{cpu::bus, emu::Emu};
 
 pub struct CpuMemory {
-    visible: bool,
     editor: MemoryEditor,
     last_visible_addrs: RangeInclusive<u64>,
     mem_contents: MemContents,
@@ -31,7 +30,6 @@ impl View for CpuMemory {
 
     fn new(_window: &mut Window) -> Self {
         CpuMemory {
-            visible: true,
             editor: MemoryEditor::new()
                 .show_range(false)
                 .addr_range((0, 0xFF_FFFF).into()),
@@ -56,7 +54,7 @@ impl View for CpuMemory {
         emu: &mut Emu,
         frame_data: S,
     ) {
-        let mut frame_data = frame_data.get_or_insert_with(|| MemContents {
+        let frame_data = frame_data.get_or_insert_with(|| MemContents {
             visible_addrs: RangeInclusive { start: 0, end: 0 },
             data: Vec::new(),
         });
@@ -78,6 +76,17 @@ impl View for CpuMemory {
         self.mem_contents.visible_addrs = frame_data.visible_addrs;
     }
 
+    fn customize_window<'a, T: AsRef<str>>(
+        &mut self,
+        _ui: &imgui::Ui,
+        window: imgui::Window<'a, T>,
+    ) -> imgui::Window<'a, T> {
+        // TODO: This prevents vertical resizing as well...?
+        // let width = self.editor.window_width(ui);
+        // window.size_constraints([width, -1.0], [width, -1.0])
+        window
+    }
+
     fn render(
         &mut self,
         ui: &imgui::Ui,
@@ -87,10 +96,11 @@ impl View for CpuMemory {
         let _mono_font = ui.push_font(window.mono_font);
 
         self.editor.handle_options_right_click(ui);
-        let mem_contents = &self.mem_contents;
         self.editor.draw_callbacks(ui, None, &mut (), |_, addr| {
-            if mem_contents.visible_addrs.contains(&addr) {
-                Some(mem_contents.data[(addr - mem_contents.visible_addrs.start) as usize])
+            if self.mem_contents.visible_addrs.contains(&addr) {
+                Some(
+                    self.mem_contents.data[(addr - self.mem_contents.visible_addrs.start) as usize],
+                )
             } else {
                 None
             }

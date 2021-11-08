@@ -7,6 +7,8 @@ pub use irqs::Irqs;
 
 mod common;
 mod interpreter;
+#[cfg(feature = "disasm")]
+pub mod disasm;
 
 use regs::Regs;
 

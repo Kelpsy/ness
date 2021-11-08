@@ -5,7 +5,8 @@ use y_pos::{SignedYPos, YPos};
 
 use core::{fmt::Write, num::NonZeroU8};
 use imgui::{
-    ChildWindow, Drag, Key, MouseButton, StyleColor, StyleVar, Ui, Window, WindowFocusedFlags,
+    ChildWindow, Drag, Key, MouseButton, Style, StyleColor, StyleVar, Ui, Window,
+    WindowFocusedFlags,
 };
 
 // TODO:
@@ -256,12 +257,10 @@ impl MemoryEditor {
             .into()
     }
 
-    fn compute_layout(&mut self, ui: &Ui) {
+    fn compute_layout(&mut self, ui: &Ui, style: &Style) {
         if self.layout.is_some() {
             return;
         }
-
-        let style = ui.clone_style();
 
         let data_row_height = ui.text_line_height();
         let data_row_height_with_spacing_int: YPos =
@@ -401,6 +400,16 @@ impl MemoryEditor {
         });
     }
 
+    #[inline]
+    pub fn window_width(&mut self, ui: &Ui) -> f32 {
+        let style = ui.clone_style();
+        self.compute_layout(ui, &style);
+        let layout = self.layout.as_ref().unwrap();
+        layout.ascii_end_scrollbar_start_win_x
+            + layout.scrollbar_size
+            + style.window_padding[0] * 2.0
+    }
+
     fn focus_on_selected_addr(&mut self, ui: &Ui) {
         let layout = self.layout.as_ref().unwrap();
         let content_height = ui.window_size()[1];
@@ -454,7 +463,7 @@ impl MemoryEditor {
         mut read: impl FnMut(&mut T, Addr) -> Option<u8>,
         // mut write: impl FnMut(&mut T, Addr, u8),
     ) {
-        self.compute_layout(ui);
+        self.compute_layout(ui, &ui.clone_style());
         let layout = self.layout.as_ref().unwrap();
 
         let window_token = if let Some(window_title) = window_title {

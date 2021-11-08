@@ -7,7 +7,7 @@ publish = false
 [features]
 default = ["debug-views", "log"]
 
-debug-views = ["fxhash", "bitflags"]
+debug-views = ["fxhash", "bitflags", "ness-core/disasm"]
 log = ["slog", "slog-term", "slog-async", "ness-core/log"]
 
 compile-shaders = ["shaderc"]
