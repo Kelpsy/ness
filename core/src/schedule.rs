@@ -64,6 +64,11 @@ impl Schedule {
     }
 
     #[inline]
+    pub fn next_event_time(&self) -> Timestamp {
+        self.schedule.next_event_time()
+    }
+
+    #[inline]
     pub fn target_time(&self) -> Timestamp {
         self.target_time
     }

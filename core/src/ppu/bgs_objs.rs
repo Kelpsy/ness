@@ -38,6 +38,15 @@ bitfield_debug! {
     }
 }
 
+bitfield_debug! {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub struct ObjControl(pub u8) {
+        pub char_base_addr: u8 @ 0..=2,
+        pub obj_0ff_100_gap: u8 @ 3..=4,
+        pub size: u8 @ 5..=7,
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Bg {
     screen_control: BgScreenControl,
@@ -136,5 +145,16 @@ impl Ppu {
         let bg = &mut self.bgs[i.get() as usize];
         bg.y_scroll = ((value as u16) << 8 | self.bg_scroll_prev_1 as u16) & 0x3FF;
         self.bg_scroll_prev_1 = value;
+    }
+
+    #[inline]
+    pub fn obj_control(&self) -> ObjControl {
+        self.obj_control
+    }
+
+    #[inline]
+    pub fn set_obj_control(&mut self, value: ObjControl) {
+        self.obj_control = value;
+        self.obj_char_base_bytes = (value.char_base_addr() as u16) << 14;
     }
 }

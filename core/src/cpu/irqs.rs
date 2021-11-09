@@ -49,7 +49,7 @@ impl Irqs {
 
     #[inline]
     pub fn set_waiting_for_exception(&mut self, value: bool) {
-        self.waiting_for_exception = value && !self.processing_exception;
+        self.waiting_for_exception = value && !(self.processing_nmi || self.hv_timer_irq_requested);
     }
 
     #[inline]

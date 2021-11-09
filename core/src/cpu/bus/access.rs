@@ -44,6 +44,10 @@ impl AccessType for DebugDmaAccess {
 }
 
 fn read_a_io<A: AccessType>(emu: &mut Emu, addr: u32) -> u8 {
+    if A::IS_DMA && (addr & 0x3FF < 0x22F || addr & 0x380 == 0x300) {
+        return 0;
+    }
+
     match addr & 0x3FF {
         0x210 => {
             // TODO: Open bus bits
@@ -59,7 +63,7 @@ fn read_a_io<A: AccessType>(emu: &mut Emu, addr: u32) -> u8 {
         }
         0x212 => {
             // TODO: Joypad and open bus bits
-            return emu.ppu.hv_status().0;
+            return emu.ppu.hv_status().0 | rand::random::<u8>() << 7;
         }
         0x300..=0x37F => {
             let channel = &emu.cpu.dmac.channels[(addr >> 4 & 7) as usize];
@@ -92,11 +96,14 @@ fn read_a_io<A: AccessType>(emu: &mut Emu, addr: u32) -> u8 {
             emu.cpu.regs.code_bank_base() | emu.cpu.regs.pc as u32,
         );
     }
-    // TODO: Open bus
-    0
+    emu.cpu.mdr
 }
 
 fn write_a_io<A: AccessType>(emu: &mut Emu, addr: u32, value: u8) {
+    if A::IS_DMA && (addr & 0x3FF < 0x220 || addr & 0x380 == 0x300) {
+        return;
+    }
+
     match addr & 0x3FF {
         0x200 => {
             // TODO: Joypad control
@@ -196,19 +203,21 @@ pub fn read_b_io<A: AccessType>(emu: &mut Emu, addr: u8) -> u8 {
             if A::LOG {
                 slog::warn!(
                     emu.cpu.logger,
-                    "Write-only PPU1 register {} read @ 0x0021{:02X}",
+                    "Write-only PPU1 register {} read @ 0x0021{:02X} @ {:#08X}",
                     A::NAME,
-                    addr
+                    addr,
+                    emu.cpu.regs.code_bank_base() | emu.cpu.regs.pc as u32,
                 );
             }
             return emu.ppu.ppu1_mdr();
         }
+        0x38 => return emu.ppu.read_oam::<A>(),
         0x39 => return emu.ppu.read_vram_low::<A>(),
         0x3A => return emu.ppu.read_vram_high::<A>(),
         0x3B => return emu.ppu.read_palette::<A>(),
-        0x3E => return emu.ppu.status77().0,
-        0x3F => return emu.ppu.status78().0,
-        0x40..=0x43 => return rand::random(),
+        0x3E => return emu.ppu.read_status77::<A>().0,
+        0x3F => return emu.ppu.read_status78::<A>().0,
+        0x40..=0x7F => return rand::random(),
         _ => {}
     }
 
@@ -222,14 +231,17 @@ pub fn read_b_io<A: AccessType>(emu: &mut Emu, addr: u8) -> u8 {
             emu.cpu.regs.code_bank_base() | emu.cpu.regs.pc as u32,
         );
     }
-    // TODO: Open bus
-    0
+    emu.cpu.mdr
 }
 
 #[allow(clippy::needless_return)] // With logging disabled, the returns are detected as needless
 pub fn write_b_io<A: AccessType>(emu: &mut Emu, addr: u8, value: u8) {
     match addr {
         0x00 => return emu.ppu.set_display_control_0(ppu::DisplayControl0(value)),
+        0x01 => return emu.ppu.set_obj_control(ppu::ObjControl(value)),
+        0x02 => return emu.ppu.oam.set_reload_addr_low(value),
+        0x03 => return emu.ppu.oam.set_reload_addr_high(value),
+        0x04 => return emu.ppu.write_oam(value),
         0x05 => return emu.ppu.set_bg_mode_control(ppu::BgModeControl(value)),
         0x07 => return emu.ppu.bgs[0].set_screen_control(ppu::BgScreenControl(value)),
         0x08 => return emu.ppu.bgs[1].set_screen_control(ppu::BgScreenControl(value)),
@@ -237,6 +249,9 @@ pub fn write_b_io<A: AccessType>(emu: &mut Emu, addr: u8, value: u8) {
         0x0A => return emu.ppu.bgs[3].set_screen_control(ppu::BgScreenControl(value)),
         0x0B => return emu.ppu.set_bg_char_control_12(ppu::BgCharControl(value)),
         0x0C => return emu.ppu.set_bg_char_control_34(ppu::BgCharControl(value)),
+        // TODO: The BG1 registers are also used for mode 7
+        0x0D => return emu.ppu.write_bg_x_scroll(ppu::BgIndex::new(0), value),
+        0x0E => return emu.ppu.write_bg_y_scroll(ppu::BgIndex::new(0), value),
         0x0F => return emu.ppu.write_bg_x_scroll(ppu::BgIndex::new(1), value),
         0x10 => return emu.ppu.write_bg_y_scroll(ppu::BgIndex::new(1), value),
         0x11 => return emu.ppu.write_bg_x_scroll(ppu::BgIndex::new(2), value),
@@ -258,7 +273,7 @@ pub fn write_b_io<A: AccessType>(emu: &mut Emu, addr: u8, value: u8) {
         0x2C => return emu.ppu.enabled_main_screen_layers = value,
         0x2D => return emu.ppu.enabled_sub_screen_layers = value,
         0x33 => return emu.ppu.set_display_control_1(ppu::DisplayControl1(value)),
-        0x40..=0x43 => {}
+        0x40..=0x7F => return,
         _ => {}
     }
 
@@ -276,32 +291,49 @@ pub fn write_b_io<A: AccessType>(emu: &mut Emu, addr: u8, value: u8) {
 }
 
 pub fn read<A: AccessType>(emu: &mut Emu, addr: u32) -> u8 {
+    macro_rules! update_mdr {
+        ($value: expr$(,)?) => {
+            if A::SIDE_EFFECTS {
+                emu.cpu.mdr = $value;
+                emu.cpu.mdr
+            } else {
+                $value
+            }
+        };
+    }
+
     let bank = (addr >> 16) as u8;
     match bank {
         // System area
         0x00..=0x3F | 0x80..=0xBF => match (addr >> 8) as u8 {
             // WRAM system area mirror
-            0x00..=0x1F => return emu.wram[addr as usize & 0x1FFF],
+            0x00..=0x1F => return update_mdr!(emu.wram[addr as usize & 0x1FFF]),
 
             // Bus B I/O
-            0x21 if !A::IS_DMA => return read_b_io::<A>(emu, addr as u8),
+            0x21 => {
+                return update_mdr!(if A::IS_DMA {
+                    0
+                } else {
+                    read_b_io::<A>(emu, addr as u8)
+                })
+            }
 
             // Internal CPU registers (TODO: some of them might be visible to DMA?)
-            0x40..=0x43 if !A::IS_DMA => return read_a_io::<A>(emu, addr),
+            0x40..=0x43 => return update_mdr!(read_a_io::<A>(emu, addr)),
 
             // LoROM and other free areas used by carts
             _ => {}
         },
 
         // WRAM
-        0x7E..=0x7F => return emu.wram[addr as usize & 0x1_FFFF],
+        0x7E..=0x7F => return update_mdr!(emu.wram[addr as usize & 0x1_FFFF]),
 
         // HiROM
         _ => {}
     }
 
     if let Some(result) = emu.cart.read_data(addr) {
-        return result;
+        return update_mdr!(result);
     }
 
     #[cfg(feature = "log")]
@@ -314,11 +346,15 @@ pub fn read<A: AccessType>(emu: &mut Emu, addr: u32) -> u8 {
             emu.cpu.regs.code_bank_base() | emu.cpu.regs.pc as u32,
         );
     }
-    0xFF
+    emu.cpu.mdr
 }
 
 #[allow(clippy::needless_return)] // With logging disabled, the return is detected as needless
 pub fn write<A: AccessType>(emu: &mut Emu, addr: u32, value: u8) {
+    if !A::IS_DMA {
+        emu.cpu.mdr = value;
+    }
+
     let bank = (addr >> 16) as u8;
     match bank {
         // System area
@@ -330,7 +366,7 @@ pub fn write<A: AccessType>(emu: &mut Emu, addr: u32, value: u8) {
             0x21 if !A::IS_DMA => return write_b_io::<A>(emu, addr as u8, value),
 
             // Internal CPU registers (TODO: some of them might be visible to DMA?)
-            0x40..=0x43 if !A::IS_DMA => return write_a_io::<A>(emu, addr, value),
+            0x40..=0x43 => return write_a_io::<A>(emu, addr, value),
 
             // LoROM and other free areas used by carts
             _ => {}

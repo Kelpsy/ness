@@ -289,8 +289,8 @@ impl Console {
         }
     }
 
-    pub fn render_window(&mut self, ui: &Ui, font: Option<imgui::FontId>) {
-        imgui::Window::new("Log").build(ui, || {
+    pub fn render_window(&mut self, ui: &Ui, font: Option<imgui::FontId>, opened: &mut bool) {
+        imgui::Window::new("Log").opened(opened).build(ui, || {
             let style = ui.clone_style();
 
             ui.checkbox("Lock", &mut self.lock_to_bottom);

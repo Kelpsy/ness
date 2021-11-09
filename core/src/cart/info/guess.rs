@@ -7,26 +7,28 @@ impl Info {
             return None;
         }
 
-        let header = Header::new(
-            ByteSlice::new(&rom[0x7FB0..0x8000]),
-            Some(header::BaseMapMode::LoRom),
-        )
-        .or_else(|| {
-            rom[..].get(0xFFB0..0x1_0000).and_then(|header_bytes| {
-                Header::new(
-                    ByteSlice::new(header_bytes),
-                    Some(header::BaseMapMode::HiRom),
-                )
-            })
-        })
-        .or_else(|| {
-            rom[..].get(0x40_FFB0..0x41_0000).and_then(|header_bytes| {
+        let header = rom[..]
+            .get(0x40_FFB0..0x41_0000)
+            .and_then(|header_bytes| {
                 Header::new(
                     ByteSlice::new(header_bytes),
                     Some(header::BaseMapMode::ExHiRom),
                 )
             })
-        })?;
+            .or_else(|| {
+                rom[..].get(0xFFB0..0x1_0000).and_then(|header_bytes| {
+                    Header::new(
+                        ByteSlice::new(header_bytes),
+                        Some(header::BaseMapMode::HiRom),
+                    )
+                })
+            })
+            .or_else(|| {
+                Header::new(
+                    ByteSlice::new(&rom[0x7FB0..0x8000]),
+                    Some(header::BaseMapMode::LoRom),
+                )
+            })?;
 
         let (rom_map, ram_map) = match header.map_mode.base() {
             header::BaseMapMode::LoRom => {

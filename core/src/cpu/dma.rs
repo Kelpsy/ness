@@ -127,7 +127,9 @@ impl Controller {
     pub fn set_gp_requested(&mut self, value: u8, schedule: &mut Schedule) {
         self.gp_requested = value;
         self.select_next_channel();
-        schedule.target_time = schedule.cur_time;
+        if self.cur_channel.is_some() {
+            schedule.target_time = schedule.cur_time;
+        }
     }
 
     #[inline]
@@ -145,14 +147,14 @@ impl Controller {
         let channel = &emu.cpu.dmac.channels[i.get() as usize];
         let mut table_addr = channel.h_cur_table_addr;
         let table_bank_base = (channel.gp_a_bank_h_table_bank as u32) << 16;
-        let counter_value = bus::read::<bus::CpuAccess>(emu, table_bank_base | table_addr as u32);
+        let counter_value = bus::read::<bus::DmaAccess>(emu, table_bank_base | table_addr as u32);
         emu.schedule.cur_time += 8;
         table_addr = table_addr.wrapping_add(1);
 
         let channel = &mut emu.cpu.dmac.channels[i.get() as usize];
         if channel.control.h_indirect() {
             let mut addr_low =
-                bus::read::<bus::CpuAccess>(emu, table_bank_base | table_addr as u32);
+                bus::read::<bus::DmaAccess>(emu, table_bank_base | table_addr as u32);
             emu.schedule.cur_time += 8;
             table_addr = table_addr.wrapping_add(1);
 
@@ -163,7 +165,7 @@ impl Controller {
                     res
                 } else {
                     let result =
-                        bus::read::<bus::CpuAccess>(emu, table_bank_base | table_addr as u32);
+                        bus::read::<bus::DmaAccess>(emu, table_bank_base | table_addr as u32);
                     emu.schedule.cur_time += 8;
                     table_addr = table_addr.wrapping_add(1);
                     result
@@ -331,7 +333,7 @@ impl Controller {
             emu.cpu.dmac.cur_channel = None;
             emu.cpu.dmac.select_next_channel();
         } else {
-            loop {
+            while emu.schedule.cur_time < emu.schedule.next_event_time() {
                 transfer!(
                     channel,
                     channel.gp_a_addr_h_table_start_addr as u32

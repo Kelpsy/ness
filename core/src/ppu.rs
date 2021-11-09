@@ -1,20 +1,22 @@
-mod bgs;
-pub mod palette;
-pub mod vram;
-pub use bgs::*;
 mod counters;
 pub use counters::*;
+mod oam;
+pub use oam::Oam;
+mod bgs_objs;
+pub mod palette;
 mod render;
-pub use render::*;
+pub mod vram;
+pub use bgs_objs::*;
 
 use crate::{
-    cpu::{bus::AccessType, Irqs, dma},
+    cpu::{bus::AccessType, dma, Irqs},
     emu::Emu,
     schedule::{self, event_slots, Schedule, Timestamp},
     utils::{bitfield_debug, zeroed_box, Zero},
     Model,
 };
 use palette::Palette;
+use render::ScreenPixel;
 use vram::Vram;
 
 pub const VIEW_WIDTH: usize = 256;
@@ -110,6 +112,7 @@ pub enum Event {
     ReloadHdmas,
     StartHdmas,
     RequestVBlankNmi,
+    ReloadOamAddr,
     EndScanline,
 }
 
@@ -120,6 +123,8 @@ pub struct Ppu {
     bg_line_pixels: [[ScreenPixel; FB_WIDTH]; 4],
     main_screen_line: [ScreenPixel; VIEW_WIDTH],
     sub_screen_line: [ScreenPixel; VIEW_WIDTH],
+    obj_line_pixels: [ScreenPixel; VIEW_WIDTH],
+    obj_tiles_in_time: u8,
 
     fb_height: usize,
     view_height: usize,
@@ -131,6 +136,7 @@ pub struct Ppu {
     ppu2_mdr: u8,
 
     pub vram: Vram,
+    pub oam: Oam,
     pub palette: Palette,
 
     status77: Status77,
@@ -157,6 +163,9 @@ pub struct Ppu {
     bg_mode_control: BgModeControl,
     bg_mode: BgMode,
     bg_tile_size_mask: u8,
+
+    obj_control: ObjControl,
+    obj_char_base_bytes: u16,
 }
 
 impl Ppu {
@@ -175,6 +184,8 @@ impl Ppu {
             bg_line_pixels: [[ScreenPixel(0); FB_WIDTH]; 4],
             main_screen_line: [ScreenPixel(0); VIEW_WIDTH],
             sub_screen_line: [ScreenPixel(0); VIEW_WIDTH],
+            obj_line_pixels: [ScreenPixel(0); VIEW_WIDTH],
+            obj_tiles_in_time: 0,
 
             fb_height: view_height,
             view_height,
@@ -186,6 +197,7 @@ impl Ppu {
             ppu2_mdr: 0,
 
             vram: Vram::new(),
+            oam: Oam::new(),
             palette: Palette::new(),
 
             status77: Status77(0).with_ppu1_version(1),
@@ -214,6 +226,9 @@ impl Ppu {
             bg_mode_control: BgModeControl(0),
             bg_mode: BgMode::new(0),
             bg_tile_size_mask: 0,
+
+            obj_control: ObjControl(0),
+            obj_char_base_bytes: 0,
         }
     }
 
@@ -229,7 +244,8 @@ impl Ppu {
                         event_slots::PPU_OTHER,
                         schedule::Event::Ppu(Event::ReloadHdmas),
                     );
-                    emu.schedule.schedule_event(event_slots::PPU_OTHER, time + 20);
+                    emu.schedule
+                        .schedule_event(event_slots::PPU_OTHER, time + 20);
                 }
                 emu.ppu.hv_status.set_hblank(false);
                 if emu.ppu.counters.v_counter().wrapping_sub(1) < emu.ppu.view_height as u16 {
@@ -259,7 +275,8 @@ impl Ppu {
                         event_slots::PPU_OTHER,
                         schedule::Event::Ppu(Event::StartHdmas),
                     );
-                    emu.schedule.schedule_event(event_slots::PPU_OTHER, time + 16);
+                    emu.schedule
+                        .schedule_event(event_slots::PPU_OTHER, time + 16);
                 }
                 emu.schedule
                     .set_event(event_slots::PPU, schedule::Event::Ppu(Event::EndScanline));
@@ -341,6 +358,19 @@ impl Ppu {
                 if emu.ppu.vblank_nmi_enabled {
                     emu.cpu.irqs.request_nmi(&mut emu.schedule);
                 }
+                emu.schedule.set_event(
+                    event_slots::PPU_OTHER,
+                    schedule::Event::Ppu(Event::ReloadOamAddr),
+                );
+                emu.schedule
+                    .schedule_event(event_slots::PPU_OTHER, time + 38);
+            }
+
+            // H=10, V=v_display_end
+            Event::ReloadOamAddr => {
+                if !emu.ppu.display_control_0.forced_blank() {
+                    emu.ppu.oam.reload_cur_byte_addr();
+                }
             }
         }
     }
@@ -372,12 +402,30 @@ impl Ppu {
 
     #[inline]
     pub fn status77(&self) -> Status77 {
-        Status77(self.status77.0 | (self.ppu1_mdr & 0x10))
+        self.status77
     }
 
     #[inline]
-    pub fn status78(&self) -> Status78 {
-        Status78(self.status78.0 | (self.ppu2_mdr & 0x20))
+    pub fn status78(&mut self) -> Status78 {
+        self.status78
+    }
+
+    #[inline]
+    pub fn read_status77<A: AccessType>(&mut self) -> Status77 {
+        let result = self.status77.0 | (self.ppu1_mdr & 0x10);
+        if A::SIDE_EFFECTS {
+            self.ppu1_mdr = result;
+        }
+        Status77(result)
+    }
+
+    #[inline]
+    pub fn read_status78<A: AccessType>(&mut self) -> Status78 {
+        let result = self.status78.0 | (self.ppu2_mdr & 0x20);
+        if A::SIDE_EFFECTS {
+            self.ppu2_mdr = result;
+        }
+        Status78(result)
     }
 
     #[inline]
@@ -434,11 +482,18 @@ impl Ppu {
     }
 
     pub fn set_display_control_0(&mut self, value: DisplayControl0) {
+        let was_in_forced_blank = self.display_control_0.forced_blank();
         self.display_control_0 = value;
         self.master_brightness = value.master_brightness();
         if self.master_brightness != 0 {
             self.master_brightness += 1;
         };
+        if was_in_forced_blank
+            && !value.forced_blank()
+            && self.counters.v_counter() == self.counters.v_display_end()
+        {
+            self.oam.reload_cur_byte_addr();
+        }
     }
 
     fn recalc_screen_width(&mut self) {

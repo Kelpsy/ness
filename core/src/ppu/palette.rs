@@ -62,8 +62,10 @@ impl Ppu {
         } else {
             color as u8
         };
-        self.palette.second_access = !self.palette.second_access;
-        self.ppu2_mdr = result;
+        if A::SIDE_EFFECTS {
+            self.palette.second_access = !self.palette.second_access;
+            self.ppu2_mdr = result;
+        }
         result
     }
 

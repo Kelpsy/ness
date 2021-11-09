@@ -95,11 +95,14 @@ macro_rules! declare_structs {
         pub enum Message {
             $(
                 $s_toggle_updates_message_ident(bool),
-                $s_update_emu_state_message_ident(Option<<$s_view_ty as View>::EmuState>),
+                $s_update_emu_state_message_ident(Option<(<$s_view_ty as View>::EmuState, bool)>),
             )*
             $(
                 $i_toggle_updates_message_ident(ViewKey, bool),
-                $i_update_emu_state_message_ident(ViewKey, Option<<$i_view_ty as View>::EmuState>),
+                $i_update_emu_state_message_ident(
+                    ViewKey,
+                    Option<(<$i_view_ty as View>::EmuState, bool)>,
+                ),
             )*
         }
 
@@ -134,7 +137,7 @@ macro_rules! declare_structs {
                             }
                         }
                         Message::$s_update_emu_state_message_ident(emu_state) => {
-                            self.$s_view_ident = emu_state.map(|s| (s, true));
+                            self.$s_view_ident = emu_state;
                         }
                     )*
                     $(
@@ -145,7 +148,7 @@ macro_rules! declare_structs {
                         }
                         Message::$i_update_emu_state_message_ident(key, emu_state) => {
                             if let Some(emu_state) = emu_state {
-                                self.$i_view_ident.insert(key, (emu_state, true));
+                                self.$i_view_ident.insert(key, emu_state);
                             } else {
                                 self.$i_view_ident.remove(&key);
                             }
@@ -259,6 +262,26 @@ macro_rules! declare_structs {
                 )*
             }
 
+            pub fn reload_emu_state(&mut self) {
+                $(
+                    if let Some((view, visible)) = &self.$s_view_ident {
+                        let emu_state = view.emu_state();
+                        self.messages.push(Message::$s_update_emu_state_message_ident(
+                            Some((emu_state, *visible)),
+                        ));
+                    }
+                )*
+                $(
+                    for (key, (view, visible)) in &self.$i_view_ident.0 {
+                        let emu_state = view.emu_state();
+                        self.messages.push(Message::$i_update_emu_state_message_ident(
+                            *key,
+                            Some((emu_state, *visible)),
+                        ));
+                    }
+                )*
+            }
+
             pub fn render_menu(&mut self, ui: &imgui::Ui, window: &mut Window) {
                 $(
                     if MenuItem::new(<$s_view_ty>::NAME)
@@ -274,7 +297,7 @@ macro_rules! declare_structs {
                             let emu_state = view.emu_state();
                             self.$s_view_ident = Some((view, true));
                             self.messages.push(Message::$s_update_emu_state_message_ident(
-                                Some(emu_state),
+                                Some((emu_state, true)),
                             ));
                         }
                     }
@@ -289,7 +312,7 @@ macro_rules! declare_structs {
                         self.$i_view_ident.0.insert(key, (view, true));
                         self.messages.push(Message::$i_update_emu_state_message_ident(
                             key,
-                            Some(emu_state),
+                            Some((emu_state, true)),
                         ));
                     }
                 )*
@@ -315,7 +338,7 @@ macro_rules! declare_structs {
                         });
                         if let Some(new_emu_state) = new_emu_state {
                             self.messages.push(Message::$s_update_emu_state_message_ident(
-                                Some(new_emu_state)
+                                Some((new_emu_state, true))
                             ));
                         } else if !opened {
                             self.messages.push(Message::$s_update_emu_state_message_ident(
@@ -346,7 +369,7 @@ macro_rules! declare_structs {
                             if let Some(new_emu_state) = new_emu_state {
                                 self.messages.push(Message::$i_update_emu_state_message_ident(
                                     *key,
-                                    Some(new_emu_state)
+                                    Some((new_emu_state, true))
                                 ));
                             } else if !opened {
                                 self.messages.push(Message::$i_update_emu_state_message_ident(

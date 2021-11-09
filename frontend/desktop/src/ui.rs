@@ -181,6 +181,9 @@ impl UiState {
                 })
                 .expect("Couldn't spawn emulation thread"),
         );
+
+        #[cfg(feature = "debug-views")]
+        self.debug_views.reload_emu_state();
     }
 
     fn stop(&mut self) {
@@ -356,8 +359,8 @@ pub fn main() {
             fps_fixed: None,
             fb_texture_id,
             fb_view_height: VIEW_HEIGHT_NTSC,
-            fb_width: VIEW_WIDTH,
-            fb_height: VIEW_HEIGHT_NTSC,
+            fb_width: FB_WIDTH,
+            fb_height: FB_HEIGHT,
 
             #[cfg(feature = "debug-views")]
             debug_views: debug_views::UiState::new(),
@@ -613,10 +616,10 @@ pub fn main() {
             };
 
             #[cfg(feature = "log")]
-            if let Some((console, _, true)) = &mut state.imgui_log {
+            if let Some((console, _, console_visible @ true)) = &mut state.imgui_log {
                 let _window_padding = ui.push_style_var(imgui::StyleVar::WindowPadding([6.0; 2]));
                 let _item_spacing = ui.push_style_var(imgui::StyleVar::ItemSpacing([0.0; 2]));
-                console.render_window(ui, Some(window.mono_font));
+                console.render_window(ui, Some(window.mono_font), console_visible);
             }
 
             #[cfg(feature = "debug-views")]

@@ -107,6 +107,7 @@ pub(super) fn stp(emu: &mut Emu) {
         emu.cpu.regs.pc.wrapping_sub(1) as u32 | emu.cpu.regs.code_bank_base()
     );
     emu.cpu.stopped = true;
+    emu.schedule.forward_to_target();
 }
 
 pub(super) fn wdm(emu: &mut Emu) {

@@ -17,6 +17,7 @@ pub struct Cpu {
     #[cfg(feature = "log")]
     logger: slog::Logger,
     pub regs: Regs,
+    mdr: u8,
     pub stopped: bool,
     pub irqs: Irqs,
     pub dmac: dma::Controller,
@@ -28,10 +29,16 @@ impl Cpu {
             #[cfg(feature = "log")]
             logger,
             regs: Regs::new(),
+            mdr: 0,
             stopped: false,
             irqs: Irqs::new(),
             dmac: dma::Controller::new(),
         }
+    }
+
+    #[inline]
+    pub fn mdr(&self) -> u8 {
+        self.mdr
     }
 
     pub(crate) fn soft_reset(emu: &mut Emu) {
