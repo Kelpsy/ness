@@ -10,6 +10,8 @@ pub mod cpu;
 pub mod emu;
 pub mod ppu;
 pub mod schedule;
+mod wram;
+pub use wram::Wram;
 
 bitflags::bitflags! {
     pub struct Keys: u16 {

@@ -69,6 +69,17 @@ impl Counters {
         irqs.set_hv_timer_irq_requested(true, schedule);
     }
 
+    pub(super) fn h_dot(&self, time: Timestamp) -> u16 {
+        let h_counter_cycles = (time - self.v_counter_last_change_time()) as u16;
+        if self.h_end_cycles() == SCANLINE_CYCLES - 4 {
+            h_counter_cycles >> 2
+        } else {
+            h_counter_cycles
+                - (((h_counter_cycles > 323 * 4) as u16) << 1)
+                - (((h_counter_cycles > 327 * 4) as u16) << 1)
+        }
+    }
+
     #[inline]
     pub fn v_counter_last_change_time(&self) -> Timestamp {
         self.v_counter_last_change_time

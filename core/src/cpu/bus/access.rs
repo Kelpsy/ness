@@ -228,13 +228,22 @@ pub fn read_b_io<A: AccessType>(emu: &mut Emu, addr: u8) -> u8 {
             }
             return emu.ppu.ppu1_mdr();
         }
+        0x37 => {
+            if A::SIDE_EFFECTS {
+                emu.ppu.latch_hv_counters(emu.schedule.cur_time);
+            }
+            return emu.cpu.mdr;
+        }
         0x38 => return emu.ppu.read_oam::<A>(),
         0x39 => return emu.ppu.read_vram_low::<A>(),
         0x3A => return emu.ppu.read_vram_high::<A>(),
         0x3B => return emu.ppu.read_palette::<A>(),
+        0x3C => return emu.ppu.read_h_latched_counter::<A>(),
+        0x3D => return emu.ppu.read_v_latched_counter::<A>(),
         0x3E => return emu.ppu.read_status77::<A>().0,
         0x3F => return emu.ppu.read_status78::<A>().0,
         0x40..=0x7F => return rand::random(),
+        0x80 => return emu.wram.read_data::<A>(),
         _ => {}
     }
 
@@ -291,6 +300,22 @@ pub fn write_b_io<A: AccessType>(emu: &mut Emu, addr: u8, value: u8) {
         0x2D => return emu.ppu.enabled_sub_screen_layers = value,
         0x33 => return emu.ppu.set_display_control_1(ppu::DisplayControl1(value)),
         0x40..=0x7F => return,
+        0x80 => return emu.wram.write_data(value),
+        0x81 => {
+            return emu
+                .wram
+                .set_addr((emu.wram.cur_addr() & !0xFF) | value as u32)
+        }
+        0x82 => {
+            return emu
+                .wram
+                .set_addr((emu.wram.cur_addr() & !(0xFF << 8)) | (value as u32) << 8)
+        }
+        0x83 => {
+            return emu
+                .wram
+                .set_addr((emu.wram.cur_addr() & !(0xFF << 16)) | (value as u32) << 16)
+        }
         _ => {}
     }
 
@@ -324,7 +349,7 @@ pub fn read<A: AccessType>(emu: &mut Emu, addr: u32) -> u8 {
         // System area
         0x00..=0x3F | 0x80..=0xBF => match (addr >> 8) as u8 {
             // WRAM system area mirror
-            0x00..=0x1F => return update_mdr!(emu.wram[addr as usize & 0x1FFF]),
+            0x00..=0x1F => return update_mdr!(emu.wram.contents[addr as usize & 0x1FFF]),
 
             // Bus B I/O
             0x21 => {
@@ -343,7 +368,7 @@ pub fn read<A: AccessType>(emu: &mut Emu, addr: u32) -> u8 {
         },
 
         // WRAM
-        0x7E..=0x7F => return update_mdr!(emu.wram[addr as usize & 0x1_FFFF]),
+        0x7E..=0x7F => return update_mdr!(emu.wram.contents[addr as usize & 0x1_FFFF]),
 
         // HiROM
         _ => {}
@@ -377,7 +402,7 @@ pub fn write<A: AccessType>(emu: &mut Emu, addr: u32, value: u8) {
         // System area
         0x00..=0x3F | 0x80..=0xBF => match (addr >> 8) as u8 {
             // WRAM system area mirror
-            0x00..=0x1F => return emu.wram[addr as usize & 0x1FFF] = value,
+            0x00..=0x1F => return emu.wram.contents[addr as usize & 0x1FFF] = value,
 
             // Bus B I/O
             0x21 if !A::IS_DMA => return write_b_io::<A>(emu, addr as u8, value),
@@ -391,7 +416,7 @@ pub fn write<A: AccessType>(emu: &mut Emu, addr: u32, value: u8) {
 
         // WRAM
         0x7E..=0x7F => {
-            emu.wram[addr as usize & 0x1_FFFF] = value;
+            emu.wram.contents[addr as usize & 0x1_FFFF] = value;
             return;
         }
 

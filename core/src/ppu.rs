@@ -1,5 +1,7 @@
 mod counters;
 pub use counters::*;
+mod latched_counters;
+pub use latched_counters::*;
 mod oam;
 pub use oam::Oam;
 mod bgs_objs;
@@ -144,6 +146,7 @@ pub struct Ppu {
     hv_status: HvStatus,
 
     pub counters: Counters,
+    latched_counters: LatchedCounters,
 
     vblank_nmi_enabled: bool,
     nmi_flag: NmiFlag,
@@ -207,6 +210,7 @@ impl Ppu {
             hv_status: HvStatus(0).with_hblank(true),
 
             counters: Counters::new(model, schedule),
+            latched_counters: LatchedCounters::new(),
 
             vblank_nmi_enabled: false,
             nmi_flag: NmiFlag(0).with_cpu_version(2),

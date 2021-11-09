@@ -3,8 +3,7 @@ use crate::{
     cpu::Cpu,
     ppu::Ppu,
     schedule::{Event, Schedule},
-    utils::{zeroed_box, Bytes},
-    Model,
+    Model, Wram,
 };
 
 pub struct Emu {
@@ -12,7 +11,7 @@ pub struct Emu {
     pub ppu: Ppu,
     pub cart: Cart,
     pub schedule: Schedule,
-    pub wram: Box<Bytes<0x2_0000>>,
+    pub wram: Wram,
 }
 
 impl Emu {
@@ -26,7 +25,7 @@ impl Emu {
             ppu: Ppu::new(model, &mut schedule),
             cart,
             schedule,
-            wram: zeroed_box(),
+            wram: Wram::new(),
         };
         emu.soft_reset();
         emu
