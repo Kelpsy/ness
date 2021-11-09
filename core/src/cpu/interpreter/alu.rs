@@ -31,6 +31,114 @@ fn do_bin_adc<A: RegSize>(emu: &mut Emu, operand: A) {
     }
 }
 
+fn do_dec_adc<A: RegSize>(emu: &mut Emu, operand: A) {
+    if A::IS_U16 {
+        let src = emu.cpu.regs.a as u32;
+        let operand = operand.as_zext_u16() as u32;
+        let mut result = (src & 0xF) + (operand & 0xF) + emu.cpu.regs.psw.carry() as u32;
+        if result > 9 {
+            result += 6;
+        }
+        result = (src & 0xF0) + (operand & 0xF0) + (result & 0xF) + (((result > 0xF) as u32) << 4);
+        if result > 0x9F {
+            result += 0x60;
+        }
+        result =
+            (src & 0xF00) + (operand & 0xF00) + (result & 0xFF) + (((result > 0xFF) as u32) << 8);
+        if result > 0x9FF {
+            result += 0x600;
+        }
+        result = (src & 0xF000)
+            + (operand & 0xF000)
+            + (result & 0xFFF)
+            + (((result > 0xFFF) as u32) << 12);
+        emu.cpu
+            .regs
+            .psw
+            .set_overflow(!(src ^ operand) & (src ^ result) & 1 << 15 != 0);
+        if result > 0x9FFF {
+            result += 0x6000;
+        }
+        emu.cpu.regs.psw.set_carry(result >> 16 != 0);
+        let result = result as u16;
+        set_nz(emu, result);
+        emu.cpu.regs.a = result;
+    } else {
+        let src = emu.cpu.regs.a & 0xFF;
+        let operand = operand.as_zext_u16();
+        let mut result = (src & 0xF) + (operand & 0xF) + emu.cpu.regs.psw.carry() as u16;
+        if result > 9 {
+            result += 6;
+        }
+        result = (src & 0xF0) + (operand & 0xF0) + (result & 0xF) + (((result > 0xF) as u16) << 4);
+        emu.cpu
+            .regs
+            .psw
+            .set_overflow(!(src ^ operand) & (src ^ result) & 1 << 7 != 0);
+        if result > 0x9F {
+            result += 0x60;
+        }
+        emu.cpu.regs.psw.set_carry(result >> 8 != 0);
+        let result = result as u8;
+        set_nz(emu, result);
+        result.update_u16_low(&mut emu.cpu.regs.a);
+    }
+}
+
+fn do_dec_sbc<A: RegSize>(emu: &mut Emu, operand: A) {
+    if A::IS_U16 {
+        let src = emu.cpu.regs.a as i32;
+        let operand = operand.as_zext_u16() as i32;
+        let mut result = (src & 0xF) + (operand & 0xF) + emu.cpu.regs.psw.carry() as i32;
+        if result <= 0xF {
+            result -= 6;
+        }
+        result = (src & 0xF0) + (operand & 0xF0) + (result & 0xF) + (((result > 0xF) as i32) << 4);
+        if result <= 0xFF {
+            result -= 0x60;
+        }
+        result =
+            (src & 0xF00) + (operand & 0xF00) + (result & 0xFF) + (((result > 0xFF) as i32) << 8);
+        if result <= 0xFFF {
+            result -= 0x600;
+        }
+        result = (src & 0xF000)
+            + (operand & 0xF000)
+            + (result & 0xFFF)
+            + (((result > 0xFFF) as i32) << 12);
+        emu.cpu
+            .regs
+            .psw
+            .set_overflow(!(src ^ operand) & (src ^ result) & 1 << 15 != 0);
+        if result <= 0xFFFF {
+            result = result.wrapping_sub(0x6000);
+        }
+        emu.cpu.regs.psw.set_carry(result > 0xFFFF);
+        let result = result as u16;
+        set_nz(emu, result);
+        emu.cpu.regs.a = result;
+    } else {
+        let src = emu.cpu.regs.a as i16 & 0xFF;
+        let operand = operand.as_zext_u16() as i16;
+        let mut result = (src & 0xF) + (operand & 0xF) + emu.cpu.regs.psw.carry() as i16;
+        if result <= 0xF {
+            result = result.wrapping_sub(6);
+        }
+        result = (src & 0xF0) + (operand & 0xF0) + (result & 0xF) + (((result > 0xF) as i16) << 4);
+        emu.cpu
+            .regs
+            .psw
+            .set_overflow(!(src ^ operand) & (src ^ result) & 1 << 7 != 0);
+        if result <= 0xFF {
+            result = result.wrapping_sub(0x60);
+        }
+        emu.cpu.regs.psw.set_carry(result > 0xFF);
+        let result = result as u8;
+        set_nz(emu, result);
+        result.update_u16_low(&mut emu.cpu.regs.a);
+    }
+}
+
 fn do_compare<I: RegSize, T: RegSize, const ADDR: AddrMode>(emu: &mut Emu, op_a: u16) {
     let op_a = T::trunc_u16(op_a);
     let op_b = do_addr_mode_read::<I, T, ADDR>(emu);
@@ -156,7 +264,7 @@ pub fn adc<A: RegSize, I: RegSize, const ADDR: AddrMode, const DECIMAL: bool>(
 ) {
     let operand = do_addr_mode_read::<I, A, ADDR>(emu);
     if DECIMAL {
-        todo!("Decimal ADC");
+        do_dec_adc(emu, operand);
     } else {
         do_bin_adc(emu, operand);
     }
@@ -167,7 +275,7 @@ pub fn sbc<A: RegSize, I: RegSize, const ADDR: AddrMode, const DECIMAL: bool>(
 ) {
     let operand = !do_addr_mode_read::<I, A, ADDR>(emu);
     if DECIMAL {
-        todo!("Decimal SBC");
+        do_dec_sbc(emu, operand);
     } else {
         do_bin_adc(emu, operand);
     }

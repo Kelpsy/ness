@@ -65,6 +65,10 @@ fn read_a_io<A: AccessType>(emu: &mut Emu, addr: u32) -> u8 {
             // TODO: Joypad and open bus bits
             return emu.ppu.hv_status().0 | rand::random::<u8>() << 7;
         }
+        0x214 => return emu.cpu.math.div_quotient() as u8,
+        0x215 => return (emu.cpu.math.div_quotient() >> 8) as u8,
+        0x216 => return emu.cpu.math.mul_result_div_remainder() as u8,
+        0x217 => return (emu.cpu.math.mul_result_div_remainder() >> 8) as u8,
         0x300..=0x37F => {
             let channel = &emu.cpu.dmac.channels[(addr >> 4 & 7) as usize];
             match addr & 0xF {
@@ -113,6 +117,19 @@ fn write_a_io<A: AccessType>(emu: &mut Emu, addr: u32, value: u8) {
                 emu.schedule.cur_time,
                 &mut emu.schedule,
             );
+        }
+        0x202 => return emu.cpu.math.multiplicand = value,
+        0x203 => {
+            emu.cpu.math.multiplier = value;
+            return emu.cpu.math.run_multiplication();
+        }
+        0x204 => return emu.cpu.math.dividend = (emu.cpu.math.dividend & 0xFF00) | value as u16,
+        0x205 => {
+            return emu.cpu.math.dividend = (emu.cpu.math.dividend & 0xFF) | (value as u16) << 8
+        }
+        0x206 => {
+            emu.cpu.math.divisor = value;
+            return emu.cpu.math.run_division();
         }
         0x207 => {
             return emu.ppu.counters.set_h_timer_value(
