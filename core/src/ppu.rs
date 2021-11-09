@@ -342,6 +342,16 @@ impl Ppu {
                     );
                     emu.schedule
                         .schedule_event(event_slots::PPU_OTHER, time + 2);
+                    emu.schedule.schedule_event(
+                        event_slots::CONTROLLERS,
+                        match emu.controllers.last_auto_read() {
+                            Some(last_time) => {
+                                let delay = time + 130 - last_time;
+                                last_time + ((delay + 255) >> 8)
+                            }
+                            None => time + 298,
+                        },
+                    );
                 } else if new_v_counter == 0 {
                     emu.ppu.hv_status.set_vblank(false);
                     emu.ppu.nmi_flag.set_nmi_triggered(false);

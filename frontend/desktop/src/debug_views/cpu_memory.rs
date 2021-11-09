@@ -78,13 +78,11 @@ impl View for CpuMemory {
 
     fn customize_window<'a, T: AsRef<str>>(
         &mut self,
-        _ui: &imgui::Ui,
+        ui: &imgui::Ui,
         window: imgui::Window<'a, T>,
     ) -> imgui::Window<'a, T> {
-        // TODO: This prevents vertical resizing as well...?
-        // let width = self.editor.window_width(ui);
-        // window.size_constraints([width, -1.0], [width, -1.0])
-        window
+        let width = self.editor.window_width(ui);
+        window.size_constraints([width, 0.0], [width, f32::INFINITY])
     }
 
     fn render(

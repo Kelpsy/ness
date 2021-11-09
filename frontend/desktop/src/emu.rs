@@ -62,8 +62,13 @@ pub(super) fn main(
     'outer: loop {
         for message in message_rx.try_iter() {
             match message {
-                Message::UpdateInput(_changes) => {
-                    // TODO: Emulator input
+                Message::UpdateInput(changes) => {
+                    if let Some(joypad) = emu.controllers.devices[0]
+                        .as_any()
+                        .downcast_mut::<ness_core::controllers::joypad::Joypad>()
+                    {
+                        joypad.modify_keys(changes.pressed, changes.released);
+                    }
                 }
                 Message::UpdateSavePath(new_path) => {
                     // TODO: Move/remove save file

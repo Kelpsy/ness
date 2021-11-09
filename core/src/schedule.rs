@@ -1,5 +1,5 @@
 use crate::{
-    ppu,
+    controllers, ppu,
     utils::{
         bounded_int,
         schedule::{self, RawTimestamp},
@@ -12,6 +12,7 @@ pub type Timestamp = RawTimestamp;
 pub enum Event {
     Ppu(ppu::Event),
     HvIrq,
+    Controllers(controllers::Event),
 }
 
 impl Default for Event {
@@ -22,7 +23,7 @@ impl Default for Event {
 
 pub mod event_slots {
     use crate::utils::def_event_slots;
-    def_event_slots!(super::EventSlotIndex, PPU, PPU_OTHER, HV_IRQ);
+    def_event_slots!(super::EventSlotIndex, PPU, PPU_OTHER, HV_IRQ, CONTROLLERS);
 }
 pub const EVENT_SLOTS: usize = event_slots::LEN;
 

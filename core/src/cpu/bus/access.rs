@@ -49,26 +49,32 @@ fn read_a_io<A: AccessType>(emu: &mut Emu, addr: u32) -> u8 {
     }
 
     match addr & 0x3FF {
-        0x210 => {
-            // TODO: Open bus bits
-            return emu.ppu.read_nmi_flag::<A>().0;
-        }
+        0x210 => return emu.ppu.read_nmi_flag::<A>().0 | (emu.cpu.mdr & 0x70),
         0x211 => {
-            // TODO: Open bus bits
             return emu
                 .ppu
                 .counters
                 .read_hv_timer_irq_flag::<A>(&mut emu.cpu.irqs, &mut emu.schedule)
-                .0;
+                .0
+                | (emu.cpu.mdr & 0x7F);
         }
         0x212 => {
-            // TODO: Joypad and open bus bits
-            return emu.ppu.hv_status().0 | rand::random::<u8>() << 7;
+            return emu.ppu.hv_status().0
+                | emu.controllers.joypad_auto_read_busy() as u8
+                | (emu.cpu.mdr & 0x3E);
         }
         0x214 => return emu.cpu.math.div_quotient() as u8,
         0x215 => return (emu.cpu.math.div_quotient() >> 8) as u8,
         0x216 => return emu.cpu.math.mul_result_div_remainder() as u8,
         0x217 => return (emu.cpu.math.mul_result_div_remainder() >> 8) as u8,
+        0x218 => return emu.controllers.auto_read_results[0] as u8,
+        0x219 => return (emu.controllers.auto_read_results[0] >> 8) as u8,
+        0x21A => return emu.controllers.auto_read_results[1] as u8,
+        0x21B => return (emu.controllers.auto_read_results[1] >> 8) as u8,
+        0x21C => return emu.controllers.auto_read_results[2] as u8,
+        0x21D => return (emu.controllers.auto_read_results[2] >> 8) as u8,
+        0x21E => return emu.controllers.auto_read_results[3] as u8,
+        0x21F => return (emu.controllers.auto_read_results[3] >> 8) as u8,
         0x300..=0x37F => {
             let channel = &emu.cpu.dmac.channels[(addr >> 4 & 7) as usize];
             match addr & 0xF {
@@ -110,7 +116,7 @@ fn write_a_io<A: AccessType>(emu: &mut Emu, addr: u32, value: u8) {
 
     match addr & 0x3FF {
         0x200 => {
-            // TODO: Joypad control
+            emu.controllers.set_joypad_auto_read_enabled(value & 1 != 0);
             return emu.ppu.set_irq_control(
                 ppu::IrqControl(value),
                 &mut emu.cpu.irqs,

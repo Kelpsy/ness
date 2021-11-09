@@ -1,4 +1,4 @@
-use ness_core::Keys as EmuKeys;
+use ness_core::controllers::joypad::Keys as EmuKeys;
 use std::collections::HashMap;
 use winit::event::{ElementState, Event, ScanCode, VirtualKeyCode, WindowEvent};
 

@@ -1,5 +1,6 @@
 use crate::{
     cart::Cart,
+    controllers::Controllers,
     cpu::Cpu,
     ppu::Ppu,
     schedule::{Event, Schedule},
@@ -8,10 +9,11 @@ use crate::{
 
 pub struct Emu {
     pub cpu: Cpu,
+    pub wram: Wram,
+    pub schedule: Schedule,
     pub ppu: Ppu,
     pub cart: Cart,
-    pub schedule: Schedule,
-    pub wram: Wram,
+    pub controllers: Controllers,
 }
 
 impl Emu {
@@ -22,10 +24,11 @@ impl Emu {
                 #[cfg(feature = "log")]
                 logger.new(slog::o!("cpu" => "")),
             ),
+            wram: Wram::new(),
             ppu: Ppu::new(model, &mut schedule),
             cart,
+            controllers: Controllers::new(&mut schedule),
             schedule,
-            wram: Wram::new(),
         };
         emu.soft_reset();
         emu
@@ -47,6 +50,10 @@ impl Emu {
                         .ppu
                         .counters
                         .handle_hv_irq_triggered(&mut self.cpu.irqs, &mut self.schedule),
+                    Event::Controllers(event) => {
+                        self.controllers
+                            .handle_event(event, time, &mut self.schedule)
+                    }
                 }
             }
         }
