@@ -88,7 +88,7 @@ impl Info {
                     size: None,
                     mask: 0,
                 }],
-                // TODO: Some HiROM boards put SRAM in banks 20-3F and A0-BF, others put them in
+                // TODO: Some HiROM boards put save RAM in banks 20-3F and A0-BF, others put them in
                 // banks 10-1F, 30-3F, 90-9F and B0-BF, how to guess which one of those layouts
                 // is needed?
                 vec![],

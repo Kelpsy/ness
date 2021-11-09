@@ -25,7 +25,7 @@ pub(super) fn sty<I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
 }
 
 pub(super) fn stz<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
-    do_addr_mode_write::<I, A, ADDR>(emu, A::trunc_u16(0));
+    do_addr_mode_write::<I, A, ADDR>(emu, A::zext_u8(0));
 }
 
 pub(super) fn mvp<I: RegSize>(emu: &mut Emu) {

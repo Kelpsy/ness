@@ -1,14 +1,15 @@
 use crate::emu::Emu;
 
 pub mod bus;
+pub mod dma;
 mod irqs;
 pub mod regs;
 pub use irqs::Irqs;
 
 mod common;
-mod interpreter;
 #[cfg(feature = "disasm")]
 pub mod disasm;
+mod interpreter;
 
 use regs::Regs;
 
@@ -18,6 +19,7 @@ pub struct Cpu {
     pub regs: Regs,
     pub stopped: bool,
     pub irqs: Irqs,
+    pub dmac: dma::Controller,
 }
 
 impl Cpu {
@@ -28,6 +30,7 @@ impl Cpu {
             regs: Regs::new(),
             stopped: false,
             irqs: Irqs::new(),
+            dmac: dma::Controller::new(),
         }
     }
 

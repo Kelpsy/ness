@@ -86,7 +86,10 @@ pub(super) fn main(
         if playing {
             emu.run_frame();
         }
-        // TODO: Copy framebuffer to frame.fb.0
+        frame.fb.0.copy_from_slice(&emu.ppu.framebuffer.0);
+        frame.view_height = emu.ppu.view_height();
+        frame.fb_width = emu.ppu.fb_width();
+        frame.fb_height = emu.ppu.fb_height();
 
         #[cfg(feature = "debug-views")]
         debug_views.prepare_frame_data(&mut emu, &mut frame.debug);

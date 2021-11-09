@@ -65,6 +65,7 @@ pub fn regs<'a>(
                     }
                     RegValue::Reg16Split(value) => {
                         ui.dummy([max_width - reg_16_bit_width, 0.0]);
+                        ui.same_line_with_spacing(0.0, 0.0);
                         ui.set_next_item_width(reg_8_bit_width);
                         ui.input_text(
                             &format!("##{}_high", name),
@@ -83,6 +84,7 @@ pub fn regs<'a>(
                     }
                     RegValue::Reg24Split(high, low) => {
                         ui.dummy([max_width - reg_24_bit_width, 0.0]);
+                        ui.same_line_with_spacing(0.0, 0.0);
                         ui.set_next_item_width(reg_8_bit_width);
                         ui.input_text(&format!("##{}_high", name), &mut format!("{:02X}", high))
                             .read_only(true)

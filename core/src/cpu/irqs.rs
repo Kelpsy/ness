@@ -1,6 +1,6 @@
 // TODO: IRQ delay emulation, especially interacting with WAI and DMAs
 
-use crate::emu::schedule::Schedule;
+use crate::schedule::Schedule;
 
 pub struct Irqs {
     irqs_enabled: bool,

@@ -165,11 +165,11 @@ pub fn adc<A: RegSize, I: RegSize, const ADDR: AddrMode, const DECIMAL: bool>(
 pub fn sbc<A: RegSize, I: RegSize, const ADDR: AddrMode, const DECIMAL: bool>(
     emu: &mut Emu,
 ) {
-    let operand = do_addr_mode_read::<I, A, ADDR>(emu);
+    let operand = !do_addr_mode_read::<I, A, ADDR>(emu);
     if DECIMAL {
         todo!("Decimal SBC");
     } else {
-        do_bin_adc(emu, !operand);
+        do_bin_adc(emu, operand);
     }
 }
 

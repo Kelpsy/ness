@@ -3,7 +3,6 @@ use super::{
     FrameDataSlot, View,
 };
 use crate::ui::window::Window;
-use core::array::IntoIter;
 use imgui::StyleVar;
 use ness_core::{cpu::regs::Psw, emu::Emu};
 
@@ -67,7 +66,7 @@ impl View for CpuState {
         _ui: &imgui::Ui,
         window: imgui::Window<'a, T>,
     ) -> imgui::Window<'a, T> {
-        window
+        window.always_auto_resize(true)
     }
 
     fn render(
@@ -90,7 +89,7 @@ impl View for CpuState {
                 ui,
                 MaxWidth::Reg16,
                 2.0,
-                IntoIter::new([
+                [
                     RegCommand::Reg(
                         "A",
                         if reg_values.psw.a_is_8_bit() {
@@ -119,15 +118,20 @@ impl View for CpuState {
                     RegCommand::Reg("SP", RegValue::Reg16(reg_values.sp)),
                     RegCommand::Reg("DO", RegValue::Reg16(reg_values.direct_page_offset)),
                     RegCommand::Reg("DB", RegValue::Reg8(reg_values.data_bank)),
-                    RegCommand::Callback(|ui| {
-                        ui.columns(1, "", false);
-                        ui.separator();
-                    }),
-                    RegCommand::Reg(
-                        "PC",
-                        RegValue::Reg24Split(reg_values.code_bank, reg_values.pc),
-                    ),
-                ]),
+                ],
+            );
+
+            ui.columns(1, "", false);
+            ui.separator();
+
+            regs(
+                ui,
+                MaxWidth::Reg24,
+                2.0,
+                [RegCommand::Reg(
+                    "PC",
+                    RegValue::Reg24Split(reg_values.code_bank, reg_values.pc),
+                )],
             );
 
             ui.text("PSW: ");

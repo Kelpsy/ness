@@ -1,24 +1,28 @@
-use crate::utils::{
-    bounded_int,
-    schedule::{self, RawTimestamp},
+use crate::{
+    ppu,
+    utils::{
+        bounded_int,
+        schedule::{self, RawTimestamp},
+    },
 };
 
 pub type Timestamp = RawTimestamp;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Event {
-    Frame,
+    Ppu(ppu::Event),
+    HvIrq,
 }
 
 impl Default for Event {
     fn default() -> Self {
-        Event::Frame
+        Event::Ppu(ppu::Event::StartHDraw)
     }
 }
 
 pub mod event_slots {
     use crate::utils::def_event_slots;
-    def_event_slots!(super::EventSlotIndex, FRAME);
+    def_event_slots!(super::EventSlotIndex, PPU, PPU_OTHER, HV_IRQ);
 }
 pub const EVENT_SLOTS: usize = event_slots::LEN;
 
@@ -55,12 +59,12 @@ impl Schedule {
     }
 
     #[inline]
-    pub fn cur_timestamp(&self) -> Timestamp {
+    pub fn cur_time(&self) -> Timestamp {
         self.cur_time
     }
 
     #[inline]
-    pub fn target_timestamp(&self) -> Timestamp {
+    pub fn target_time(&self) -> Timestamp {
         self.target_time
     }
 
@@ -69,11 +73,19 @@ impl Schedule {
         &self.schedule
     }
 
+    pub(crate) fn set_event(&mut self, slot_index: EventSlotIndex, event: Event) {
+        self.schedule.set_event(slot_index, event);
+    }
+
     pub(crate) fn schedule_event(&mut self, slot_index: EventSlotIndex, time: Timestamp) {
         self.schedule.schedule(slot_index, time);
         if time < self.target_time {
             self.target_time = time;
         }
+    }
+
+    pub(crate) fn cancel_event(&mut self, slot_index: EventSlotIndex) {
+        self.schedule.cancel(slot_index);
     }
 
     pub(crate) fn pop_pending_event(&mut self) -> Option<(Event, Timestamp)> {

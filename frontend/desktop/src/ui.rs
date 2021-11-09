@@ -282,7 +282,7 @@ pub fn main() {
 
     let mut window_builder = futures_executor::block_on(window::Builder::new(
         "Ness",
-        (1300, 800),
+        global_config.contents.window_size,
         global_config.contents.imgui_config_path.clone(),
     ));
 
@@ -319,9 +319,9 @@ pub fn main() {
                         .describe()
                         .srgb
                     {
-                        wgpu::TextureFormat::Bgra8UnormSrgb
+                        wgpu::TextureFormat::Rgba8UnormSrgb
                     } else {
-                        wgpu::TextureFormat::Bgra8Unorm
+                        wgpu::TextureFormat::Rgba8Unorm
                     },
                 ),
                 ..Default::default()
@@ -688,8 +688,14 @@ pub fn main() {
 
             window::ControlFlow::Continue
         },
-        move |_, mut state| {
+        move |window, mut state| {
             state.stop();
+            state.global_config.contents.window_size = window
+                .window
+                .inner_size()
+                .to_logical::<u32>(window.scale_factor)
+                .into();
+            state.global_config.dirty = true;
             state
                 .global_config
                 .flush()

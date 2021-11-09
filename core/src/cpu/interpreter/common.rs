@@ -1,5 +1,5 @@
 pub use super::super::common::{AddrMode, JumpAddr, RegSize};
-use crate::{cpu::bus, emu::schedule::Timestamp, emu::Emu};
+use crate::{cpu::bus, schedule::Timestamp, emu::Emu};
 
 pub fn add_io_cycles(emu: &mut Emu, cycles: u8) {
     emu.schedule.cur_time += cycles as Timestamp * 6;

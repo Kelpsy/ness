@@ -1,13 +1,15 @@
-#![feature(drain_filter, adt_const_params)]
+#![feature(drain_filter, adt_const_params, array_chunks)]
+#![allow(incomplete_features)]
 
 use serde::{Deserialize, Serialize};
 
 pub extern crate emu_utils as utils;
 
+pub mod cart;
+pub mod cpu;
 pub mod emu;
 pub mod ppu;
-pub mod cpu;
-pub mod cart;
+pub mod schedule;
 
 bitflags::bitflags! {
     pub struct Keys: u16 {
@@ -26,7 +28,7 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Model {
     Ntsc,

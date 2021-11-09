@@ -86,7 +86,9 @@ pub(super) fn nop(emu: &mut Emu) {
 
 pub(super) fn wai(emu: &mut Emu) {
     emu.cpu.irqs.set_waiting_for_exception(true);
-    emu.schedule.forward_to_target();
+    if emu.cpu.irqs.waiting_for_exception() {
+        emu.schedule.forward_to_target();
+    }
 }
 
 pub(super) fn cop(emu: &mut Emu) {
