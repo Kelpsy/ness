@@ -1,6 +1,13 @@
 use super::imgui_wgpu;
+#[cfg(target_os = "macos")]
+use cocoa::{
+    appkit::{NSWindow, NSWindowOcclusionState},
+    base::id,
+};
 use core::{iter, mem::ManuallyDrop};
 use std::{path::PathBuf, time::Instant};
+#[cfg(target_os = "macos")]
+use winit::platform::macos::WindowExtMacOS;
 use winit::{
     dpi::{LogicalSize, PhysicalSize},
     event::{Event, WindowEvent},
@@ -157,6 +164,23 @@ pub struct Builder {
     pub imgui: imgui::Context,
 }
 
+pub struct Window {
+    pub window: WinitWindow,
+    pub is_hidden: bool,
+    pub scale_factor: f64,
+    pub last_frame: Instant,
+    pub imgui_winit_platform: imgui_winit_support::WinitPlatform,
+    pub gfx: GfxState,
+    pub normal_font: imgui::FontId,
+    pub mono_font: imgui::FontId,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ControlFlow {
+    Continue,
+    Exit,
+}
+
 impl Builder {
     pub async fn new(
         title: impl Into<String>,
@@ -282,12 +306,25 @@ impl Builder {
                     window
                         .imgui_winit_platform
                         .prepare_render(&ui, &window.window);
-                    window.gfx.redraw(ui.render(), window.window.inner_size());
-                    window.gfx.device_state.device.poll(wgpu::Maintain::Poll);
+                    let imgui_draw_data = ui.render();
 
-                    if window.is_hidden {
-                        window.is_hidden = false;
-                        window.window.set_visible(true);
+                    // TODO: https://github.com/rust-windowing/winit/issues/2022
+                    #[cfg(target_os = "macos")]
+                    let window_visible =
+                        unsafe { (window.window.ns_window() as id).occlusionState() }
+                            .contains(NSWindowOcclusionState::NSWindowOcclusionStateVisible);
+                    #[cfg(not(target_os = "macos"))]
+                    let window_visible = true;
+                    if window.is_hidden || window_visible {
+                        window
+                            .gfx
+                            .redraw(imgui_draw_data, window.window.inner_size());
+                        window.gfx.device_state.device.poll(wgpu::Maintain::Poll);
+
+                        if window.is_hidden {
+                            window.is_hidden = false;
+                            window.window.set_visible(true);
+                        }
                     }
                 }
                 Event::LoopDestroyed => {
@@ -302,21 +339,4 @@ impl Builder {
             }
         });
     }
-}
-
-pub struct Window {
-    pub window: WinitWindow,
-    pub is_hidden: bool,
-    pub scale_factor: f64,
-    pub last_frame: Instant,
-    pub imgui_winit_platform: imgui_winit_support::WinitPlatform,
-    pub gfx: GfxState,
-    pub normal_font: imgui::FontId,
-    pub mono_font: imgui::FontId,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ControlFlow {
-    Continue,
-    Exit,
 }

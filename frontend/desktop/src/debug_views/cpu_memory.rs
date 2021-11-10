@@ -45,7 +45,7 @@ impl View for CpuMemory {
 
     fn emu_state(&self) -> Self::EmuState {
         EmuState {
-            visible_addrs: (0, 0).into(),
+            visible_addrs: self.last_visible_addrs,
         }
     }
 

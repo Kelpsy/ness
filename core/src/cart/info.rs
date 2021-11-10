@@ -56,7 +56,7 @@ impl Info {
                                 let base_offset = map::mirror(region.offset, size);
                                 let offset = (base_offset
                                     + map::mirror(
-                                        map::reduce(0xFF80, region.mask),
+                                        map::reduce(0xFFB0, region.mask),
                                         size - base_offset,
                                     )) as usize;
                                 return Header::new(

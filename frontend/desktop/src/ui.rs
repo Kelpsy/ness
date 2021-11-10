@@ -122,7 +122,7 @@ impl UiState {
                     let mut ram = BoxedByteSlice::new_zeroed(ram_len);
                     ram_file
                         .read_exact(&mut ram[..])
-                        .expect("Couldn't read ROM file");
+                        .expect("Couldn't read save RAM file");
                     Some(ram)
                 }
                 Err(err) => match err.kind() {

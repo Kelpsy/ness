@@ -4,7 +4,7 @@ use super::{config::LaunchConfig, input, triple_buffer, FrameData};
 use ness_core::{cart::Cart, emu::Emu, Model};
 use parking_lot::RwLock;
 use std::{
-    hint,
+    fs, hint,
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -111,12 +111,18 @@ pub(super) fn main(
 
         frame_tx.finish();
 
-        if playing {
-            if let Some(_save_path) = &cur_save_path {
-                let now = Instant::now();
-                if now - last_save_flush_time >= *shared_state.autosave_interval.read() {
-                    last_save_flush_time = now;
-                    // TODO: Autosave
+        if let Some(save_path) = &cur_save_path {
+            let now = Instant::now();
+            if now - last_save_flush_time >= *shared_state.autosave_interval.read() {
+                last_save_flush_time = now;
+                if emu.cart.ram_modified()
+                    && save_path
+                        .parent()
+                        .map(|parent| fs::create_dir_all(parent).is_ok())
+                        .unwrap_or(true)
+                    && fs::write(save_path, &emu.cart.ram()[..]).is_ok()
+                {
+                    emu.cart.mark_ram_flushed();
                 }
             }
         }
