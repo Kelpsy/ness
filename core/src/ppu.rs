@@ -4,11 +4,13 @@ mod latched_counters;
 pub use latched_counters::*;
 mod oam;
 pub use oam::Oam;
-mod bgs_objs;
+mod bgs_objs_mosaic;
 pub mod palette;
 mod render;
 pub mod vram;
-pub use bgs_objs::*;
+mod windows_math;
+pub use bgs_objs_mosaic::*;
+pub use windows_math::*;
 
 use crate::{
     cpu::{bus::AccessType, dma, Irqs},
@@ -126,6 +128,7 @@ pub struct Ppu {
     main_screen_line: [ScreenPixel; VIEW_WIDTH],
     sub_screen_line: [ScreenPixel; VIEW_WIDTH],
     obj_line_pixels: [ScreenPixel; VIEW_WIDTH],
+    layer_window_masks: [[WindowMask; 2]; 6],
     obj_tiles_in_time: u8,
 
     fb_height: usize,
@@ -156,6 +159,23 @@ pub struct Ppu {
     display_control_1: DisplayControl1,
     pub enabled_main_screen_layers: u8,
     pub enabled_sub_screen_layers: u8,
+
+    color_math_control_a: ColorMathControlA,
+    color_math_control_b: ColorMathControlB,
+    color_math_main_screen_mask: u8,
+    pub sub_backdrop_color: u16,
+
+    pub window_ranges: [(u8, u8); 2],
+    win12_areas: [LayerWin12Areas; 3],
+    win12_masks: [LayerWin12Masks; 2],
+    pub win_disabled_layer_masks: [u8; 2],
+    layer_win12_areas: [[LayerWin12Area; 2]; 6],
+    layer_win12_masks: [LayerWin12Mask; 6],
+
+    mosaic_control: MosaicControl,
+    mosaic_remaining_lines: (u8, u8),
+    mosaic_size: u8,
+    bg_mosaic_mask: u8,
 
     bg_char_control_12: BgCharControl,
     bg_char_control_34: BgCharControl,
@@ -188,6 +208,7 @@ impl Ppu {
             main_screen_line: [ScreenPixel(0); VIEW_WIDTH],
             sub_screen_line: [ScreenPixel(0); VIEW_WIDTH],
             obj_line_pixels: [ScreenPixel(0); VIEW_WIDTH],
+            layer_window_masks: [[[0; WIN_BUFFER_LEN]; 2]; 6],
             obj_tiles_in_time: 0,
 
             fb_height: view_height,
@@ -221,6 +242,23 @@ impl Ppu {
             enabled_main_screen_layers: 0,
             enabled_sub_screen_layers: 0,
 
+            color_math_control_a: ColorMathControlA(0),
+            color_math_control_b: ColorMathControlB(0),
+            color_math_main_screen_mask: 0,
+            sub_backdrop_color: 0,
+
+            window_ranges: [(0, 0); 2],
+            win12_areas: [LayerWin12Areas(0); 3],
+            win12_masks: [LayerWin12Masks(0); 2],
+            win_disabled_layer_masks: [0; 2],
+            layer_win12_areas: [[LayerWin12Area::Disabled; 2]; 6],
+            layer_win12_masks: [LayerWin12Mask::Or; 6],
+
+            mosaic_control: MosaicControl(0),
+            mosaic_remaining_lines: (0, 0),
+            mosaic_size: 1,
+            bg_mosaic_mask: 0,
+
             bg_char_control_12: BgCharControl(0),
             bg_char_control_34: BgCharControl(0),
             bg_scroll_prev_1: 0,
@@ -244,6 +282,7 @@ impl Ppu {
                     emu.ppu
                         .status78
                         .set_interlace_field(!emu.ppu.status78.interlace_field());
+                    emu.ppu.mosaic_remaining_lines = (emu.ppu.mosaic_size, emu.ppu.mosaic_size);
                     emu.schedule.set_event(
                         event_slots::PPU_OTHER,
                         schedule::Event::Ppu(Event::ReloadHdmas),

@@ -11,6 +11,18 @@ pub(super) use bounded::BgMode;
 
 bitfield_debug! {
     #[derive(Clone, Copy, PartialEq, Eq)]
+    pub struct MosaicControl(pub u8) {
+        pub bg_mask: u8 @ 0..=3,
+        pub bg1_mosaic: bool @ 0,
+        pub bg2_mosaic: bool @ 1,
+        pub bg3_mosaic: bool @ 2,
+        pub bg4_mosaic: bool @ 3,
+        pub mosaic_size: u8 @ 4..=7,
+    }
+}
+
+bitfield_debug! {
+    #[derive(Clone, Copy, PartialEq, Eq)]
     pub struct BgModeControl(pub u8) {
         pub bg_mode: u8 @ 0..=2,
         pub bg3_m1_priority: bool @ 3,
@@ -93,6 +105,18 @@ impl Bg {
 }
 
 impl Ppu {
+    #[inline]
+    pub fn mosaic_control(&self) -> MosaicControl {
+        self.mosaic_control
+    }
+
+    #[inline]
+    pub fn set_mosaic_control(&mut self, value: MosaicControl) {
+        self.mosaic_control = value;
+        self.mosaic_size = value.mosaic_size() + 1;
+        self.bg_mosaic_mask = value.bg_mask();
+    }
+
     #[inline]
     pub fn bg_mode_control(&self) -> BgModeControl {
         self.bg_mode_control

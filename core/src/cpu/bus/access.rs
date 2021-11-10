@@ -275,6 +275,7 @@ pub fn write_b_io<A: AccessType>(emu: &mut Emu, addr: u8, value: u8) {
         0x03 => return emu.ppu.oam.set_reload_addr_high(value),
         0x04 => return emu.ppu.write_oam(value),
         0x05 => return emu.ppu.set_bg_mode_control(ppu::BgModeControl(value)),
+        0x06 => return emu.ppu.set_mosaic_control(ppu::MosaicControl(value)),
         0x07 => return emu.ppu.bgs[0].set_screen_control(ppu::BgScreenControl(value)),
         0x08 => return emu.ppu.bgs[1].set_screen_control(ppu::BgScreenControl(value)),
         0x09 => return emu.ppu.bgs[2].set_screen_control(ppu::BgScreenControl(value)),
@@ -294,7 +295,7 @@ pub fn write_b_io<A: AccessType>(emu: &mut Emu, addr: u8, value: u8) {
             return emu
                 .ppu
                 .vram
-                .set_increment_control(ppu::vram::IncrementControl(value))
+                .set_increment_control(ppu::vram::IncrementControl(value));
         }
         0x16 => return emu.ppu.vram.set_addr_low(value),
         0x17 => return emu.ppu.vram.set_addr_high(value),
@@ -302,15 +303,49 @@ pub fn write_b_io<A: AccessType>(emu: &mut Emu, addr: u8, value: u8) {
         0x19 => return emu.ppu.write_vram_high(value),
         0x21 => return emu.ppu.palette.set_word_addr(value),
         0x22 => return emu.ppu.write_palette(value),
+        0x23 => return emu.ppu.set_win12_areas_bg_12(ppu::LayerWin12Areas(value)),
+        0x24 => return emu.ppu.set_win12_areas_bg_34(ppu::LayerWin12Areas(value)),
+        0x25 => {
+            return emu
+                .ppu
+                .set_win12_areas_obj_math(ppu::LayerWin12Areas(value));
+        }
+        0x26 => return emu.ppu.window_ranges[0].0 = value,
+        0x27 => return emu.ppu.window_ranges[0].1 = value,
+        0x28 => return emu.ppu.window_ranges[1].0 = value,
+        0x29 => return emu.ppu.window_ranges[1].1 = value,
+        0x2A => return emu.ppu.set_win12_masks_bgs(ppu::LayerWin12Masks(value)),
+        0x2B => {
+            return emu
+                .ppu
+                .set_win12_masks_obj_math(ppu::LayerWin12Masks(value));
+        }
         0x2C => return emu.ppu.enabled_main_screen_layers = value,
         0x2D => return emu.ppu.enabled_sub_screen_layers = value,
+        0x2E => return emu.ppu.win_disabled_layer_masks[0] = value,
+        0x2F => return emu.ppu.win_disabled_layer_masks[1] = value,
+        0x30 => {
+            return emu
+                .ppu
+                .set_color_math_control_a(ppu::ColorMathControlA(value));
+        }
+        0x31 => {
+            return emu
+                .ppu
+                .set_color_math_control_b(ppu::ColorMathControlB(value));
+        }
+        0x32 => {
+            return emu
+                .ppu
+                .write_sub_backdrop_color(ppu::SubBackdropColorWrite(value));
+        }
         0x33 => return emu.ppu.set_display_control_1(ppu::DisplayControl1(value)),
         0x40..=0x7F => return,
         0x80 => return emu.wram.write_data(value),
         0x81 => {
             return emu
                 .wram
-                .set_addr((emu.wram.cur_addr() & !0xFF) | value as u32)
+                .set_addr((emu.wram.cur_addr() & !0xFF) | value as u32);
         }
         0x82 => {
             return emu
