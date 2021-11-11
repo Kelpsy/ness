@@ -314,7 +314,7 @@ impl Ppu {
                     self,
                     BgIndex::new(1),
                 ),
-                7 => {} // TODO: Mode 7
+                7 => self.draw_bg_mode7::<true>(),
                 _ => {}
             }
         }
@@ -333,7 +333,7 @@ impl Ppu {
                     self, BgIndex::new(0)
                 ),
                 6 => self.draw_bg_text::<4, 1, 0>(BgIndex::new(0)),
-                _ => {} // TODO: Mode 7
+                _ => self.draw_bg_mode7::<false>(),
             }
         }
 
@@ -671,6 +671,110 @@ impl Ppu {
                 pixel = tile_pixels[tiles_x & tile_size_x_mask];
             }
             *line_pixel = pixel;
+        }
+    }
+
+    fn draw_bg_mode7<const EXTBG: bool>(&mut self) {
+        let mosaic_size = if self.bg_mosaic_mask & 1 << EXTBG as u8 != 0 {
+            self.mosaic_remaining_lines.1 as usize
+        } else {
+            1
+        };
+
+        let mut screen_y = self.counters.v_counter();
+        screen_y -= screen_y % mosaic_size as u16;
+
+        let (flipped_start_x, x_incr, y_incr) = if self.mode7.control().x_flip() {
+            (
+                0xFF,
+                -self.mode7.params[0] as i32,
+                -self.mode7.params[2] as i32,
+            )
+        } else {
+            (
+                0_i16,
+                self.mode7.params[0] as i32,
+                self.mode7.params[2] as i32,
+            )
+        };
+        let flipped_y = if self.mode7.control().y_flip() {
+            0xFF ^ screen_y
+        } else {
+            screen_y
+        } as i16;
+
+        let origin = self.mode7.origin();
+
+        let mut map_x = ((origin[0] as i32 * self.mode7.params[0] as i32) & !0x3F)
+            + ((origin[1] as i32 * self.mode7.params[1] as i32) & !0x3F)
+            + ((self.mode7.center[0] as i32) << 8)
+            + (flipped_start_x as i32 * self.mode7.params[0] as i32)
+            + ((flipped_y as i32 * self.mode7.params[1] as i32) & !0x3F);
+        let mut map_y = ((origin[0] as i32 * self.mode7.params[2] as i32) & !0x3F)
+            + ((origin[1] as i32 * self.mode7.params[3] as i32) & !0x3F)
+            + ((self.mode7.center[1] as i32) << 8)
+            + (flipped_start_x as i32 * self.mode7.params[2] as i32)
+            + ((flipped_y as i32 * self.mode7.params[3] as i32) & !0x3F);
+
+        let mut pixel_attrs = ScreenPixel(0).with_color_math_mask(1 << EXTBG as u8);
+        if !EXTBG {
+            pixel_attrs.set_bg_priority(2);
+        }
+        let mut mosaic_counter = 1;
+        let mut pixel = ScreenPixel(0);
+
+        for line_pixels in self.bg_line_pixels[EXTBG as usize]
+            [..VIEW_WIDTH << self.fb_x_shift as usize]
+            .chunks_exact_mut(self.fb_x_shift as usize + 1)
+        {
+            mosaic_counter -= 1;
+            #[allow(clippy::never_loop)]
+            if mosaic_counter == 0 {
+                mosaic_counter = mosaic_size;
+                pixel = loop {
+                    let screen_over = map_x as u32 > 0x80 << 11 || map_y as u32 > 0x80 << 11;
+                    let tile_index =
+                        ((map_y >> 11) as u16 & 0x7F) << 7 | ((map_x >> 11) as u16 & 0x7F);
+                    let mut char_index = self.vram.contents[(tile_index << 1) as usize];
+                    match self.mode7.control().screen_over() {
+                        0 | 1 => {}
+                        2 => {
+                            if screen_over {
+                                break ScreenPixel(0);
+                            }
+                        }
+                        _ => {
+                            if screen_over {
+                                char_index = 0;
+                            }
+                        }
+                    }
+                    let color_index = self.vram.contents[((char_index as u16) << 7
+                        | (map_y as u16 >> 4 & 0x70)
+                        | (map_x as u16 >> 7 & 0xE)
+                        | 1) as usize];
+                    break if EXTBG {
+                        if color_index & 0x7F == 0 {
+                            ScreenPixel(0)
+                        } else {
+                            pixel_attrs
+                                .with_bg_priority(2 | (color_index >> 7))
+                                .with_rgb(self.palette.contents[(color_index & 0x7F) as usize])
+                        }
+                    } else if color_index == 0 {
+                        ScreenPixel(0)
+                    } else {
+                        pixel_attrs.with_rgb(if self.color_math_control_a.use_direct_color() {
+                            direct_color_from_index(color_index)
+                        } else {
+                            self.palette.contents[color_index as usize]
+                        })
+                    };
+                };
+            }
+            line_pixels.fill(pixel);
+            map_x += x_incr;
+            map_y += y_incr;
         }
     }
 

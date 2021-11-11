@@ -1,15 +1,17 @@
+mod bgs_objs_mosaic;
+pub use bgs_objs_mosaic::*;
 mod counters;
 pub use counters::*;
 mod latched_counters;
 pub use latched_counters::*;
+mod mode7;
+pub use mode7::*;
 mod oam;
 pub use oam::Oam;
-mod bgs_objs_mosaic;
 pub mod palette;
 mod render;
 pub mod vram;
 mod windows_math;
-pub use bgs_objs_mosaic::*;
 pub use windows_math::*;
 
 use crate::{
@@ -160,6 +162,8 @@ pub struct Ppu {
     pub enabled_main_screen_layers: u8,
     pub enabled_sub_screen_layers: u8,
 
+    pub mode7: Mode7,
+
     color_math_control_a: ColorMathControlA,
     color_math_control_b: ColorMathControlB,
     color_math_main_screen_mask: u8,
@@ -241,6 +245,8 @@ impl Ppu {
             display_control_1: DisplayControl1(0).with_bg_v_direction_display(model == Model::Pal),
             enabled_main_screen_layers: 0,
             enabled_sub_screen_layers: 0,
+
+            mode7: Mode7::new(),
 
             color_math_control_a: ColorMathControlA(0),
             color_math_control_b: ColorMathControlB(0),

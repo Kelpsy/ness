@@ -237,6 +237,9 @@ pub fn read_b_io<A: AccessType>(emu: &mut Emu, addr: u8) -> u8 {
             }
             return emu.ppu.ppu1_mdr();
         }
+        0x34 => return emu.ppu.multiplication_result(emu.schedule.cur_time) as u8,
+        0x35 => return (emu.ppu.multiplication_result(emu.schedule.cur_time) >> 8) as u8,
+        0x36 => return (emu.ppu.multiplication_result(emu.schedule.cur_time) >> 16) as u8,
         0x37 => {
             if A::SIDE_EFFECTS {
                 emu.ppu.latch_hv_counters(emu.schedule.cur_time);
@@ -288,9 +291,16 @@ pub fn write_b_io<A: AccessType>(emu: &mut Emu, addr: u8, value: u8) {
         0x0A => return emu.ppu.bgs[3].set_screen_control(ppu::BgScreenControl(value)),
         0x0B => return emu.ppu.set_bg_char_control_12(ppu::BgCharControl(value)),
         0x0C => return emu.ppu.set_bg_char_control_34(ppu::BgCharControl(value)),
-        // TODO: The BG1 registers are also used for mode 7
-        0x0D => return emu.ppu.write_bg_x_scroll(ppu::BgIndex::new(0), value),
-        0x0E => return emu.ppu.write_bg_y_scroll(ppu::BgIndex::new(0), value),
+        0x0D => {
+            emu.ppu.write_bg_x_scroll(ppu::BgIndex::new(0), value);
+            emu.ppu.write_mode7_scroll(0, value);
+            return;
+        }
+        0x0E => {
+            emu.ppu.write_bg_y_scroll(ppu::BgIndex::new(0), value);
+            emu.ppu.write_mode7_scroll(1, value);
+            return;
+        }
         0x0F => return emu.ppu.write_bg_x_scroll(ppu::BgIndex::new(1), value),
         0x10 => return emu.ppu.write_bg_y_scroll(ppu::BgIndex::new(1), value),
         0x11 => return emu.ppu.write_bg_x_scroll(ppu::BgIndex::new(2), value),
@@ -307,6 +317,13 @@ pub fn write_b_io<A: AccessType>(emu: &mut Emu, addr: u8, value: u8) {
         0x17 => return emu.ppu.vram.set_addr_high(value),
         0x18 => return emu.ppu.write_vram_low(value),
         0x19 => return emu.ppu.write_vram_high(value),
+        0x1A => return emu.ppu.set_mode7_control(ppu::Mode7Control(value)),
+        0x1B => return emu.ppu.write_mode7_param(0, value),
+        0x1C => return emu.ppu.write_mode7_param(1, value),
+        0x1D => return emu.ppu.write_mode7_param(2, value),
+        0x1E => return emu.ppu.write_mode7_param(3, value),
+        0x1F => return emu.ppu.write_mode7_center(0, value),
+        0x20 => return emu.ppu.write_mode7_center(1, value),
         0x21 => return emu.ppu.palette.set_word_addr(value),
         0x22 => return emu.ppu.write_palette(value),
         0x23 => return emu.ppu.set_win12_areas_bg_12(ppu::LayerWin12Areas(value)),
