@@ -119,7 +119,7 @@ pub fn consume_imm_16(apu: &mut Apu) -> u16 {
 
 pub fn push_8(apu: &mut Apu, value: u8) {
     let sp = apu.spc700.regs.sp;
-    write_8(apu, apu.spc700.regs.sp as u16 | 0x100, value);
+    write_8(apu, sp as u16 | 0x100, value);
     apu.spc700.regs.sp = sp.wrapping_sub(1);
 }
 

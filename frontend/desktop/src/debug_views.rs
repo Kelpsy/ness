@@ -6,6 +6,10 @@ mod cpu_memory;
 pub use cpu_memory::CpuMemory;
 mod cpu_disasm;
 pub use cpu_disasm::CpuDisasm;
+mod spc_state;
+pub use spc_state::SpcState;
+mod spc_memory;
+pub use spc_memory::SpcMemory;
 
 use super::ui::window::Window;
 use fxhash::FxHashMap;
@@ -398,6 +402,9 @@ macro_rules! declare_structs {
 
 declare_structs!(
     singleton cpu_state, CpuState, ToggleCpuStateUpdates, UpdateCpuStateEmuState;
+    singleton spc_state, SpcState, ToggleSpcStateUpdates, UpdateSpcStateEmuState;
     instanceable cpu_memory, CpuMemory, ToggleCpuMemoryUpdates, UpdateCpuMemoryEmuState;
     instanceable cpu_disasm, CpuDisasm, ToggleCpuDisasmUpdates, UpdateCpuDisasmEmuState;
+    instanceable spc_memory, SpcMemory, ToggleSpcMemoryUpdates, UpdateSpcMemoryEmuState;
+    // instanceable spc_disasm, SpcDisasm, ToggleSpcDisasmUpdates, UpdateSpcDisasmEmuState;
 );

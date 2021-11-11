@@ -49,6 +49,9 @@ fn read_a_io<A: AccessType>(emu: &mut Emu, addr: u32) -> u8 {
     }
 
     match addr & 0x3FF {
+        // TODO: Manual controller reading
+        0x016 => return emu.cpu.mdr & 0xFC,
+        0x017 => return 0x1C | (emu.cpu.mdr & 0xE0),
         0x210 => return emu.ppu.read_nmi_flag::<A>().0 | (emu.cpu.mdr & 0x70),
         0x211 => {
             return emu
