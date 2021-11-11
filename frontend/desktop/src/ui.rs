@@ -70,6 +70,7 @@ fn init_logging(
 struct UiState {
     global_config: Config<config::Global>,
     game_config: Option<Config<config::Game>>,
+    game_title: Option<String>,
     cart_db: Option<cart::info::db::Db>,
 
     playing: bool,
@@ -337,6 +338,7 @@ pub fn main() {
     window_builder.run(
         UiState {
             game_config: None,
+            game_title: None,
             cart_db,
 
             playing: false,
@@ -387,9 +389,11 @@ pub fn main() {
                     let fps_fixed = (frame.fps * 10.0).round() as u64;
                     if Some(fps_fixed) != state.fps_fixed {
                         state.fps_fixed = Some(fps_fixed);
-                        window
-                            .window
-                            .set_title(&format!("Ness - {:.01} FPS", frame.fps));
+                        window.window.set_title(&format!(
+                            "Ness - {} - {:.01} FPS",
+                            state.game_title.as_ref().unwrap(),
+                            frame.fps
+                        ));
                     }
 
                     state.fb_view_height = frame.view_height;
@@ -415,6 +419,8 @@ pub fn main() {
                         },
                     );
                 }
+            } else {
+                window.window.set_title("Ness - No game loaded");
             }
 
             if state.playing {
@@ -511,7 +517,7 @@ pub fn main() {
                                     .title
                                     .as_deref()
                                     .unwrap_or_else(|| {
-                                        path.file_name()
+                                        path.file_stem()
                                             .unwrap()
                                             .to_str()
                                             .expect("Non-UTF-8 ROM filename provided")
@@ -547,6 +553,7 @@ pub fn main() {
                                     &game_title,
                                 ) {
                                     Ok(launch_config) => {
+                                        state.game_title = Some(game_title);
                                         state.game_config = Some(game_config);
                                         state.start(launch_config, rom, cart_info);
                                     }
