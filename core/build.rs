@@ -418,8 +418,209 @@ fn output_main_cpu_disasm_instr_table() {
         .expect("Couldn't output 65c816 disassembly instruction table");
 }
 
+fn output_spc700_instr_table() {
+    let instrs = (0..0x100).map(|instr| match instr & 0xF {
+        0 => match instr >> 4 {
+            0x0 => "nop",
+            0x1 => "b_cond::<7, false>",
+            0x2 => "clrp",
+            0x3 => "b_cond::<7, true>",
+            0x4 => "setp",
+            0x5 => "b_cond::<6, false>",
+            0x6 => "clrc",
+            0x7 => "b_cond::<6, true>",
+            0x8 => "setc",
+            0x9 => "b_cond::<0, false>",
+            0xA => "ei",
+            0xB => "b_cond::<0, true>",
+            0xC => "di",
+            0xD => "b_cond::<1, false>",
+            0xE => "clrv",
+            0xF => "b_cond::<1, true>",
+            _ => unreachable!(),
+        }
+        .to_string(),
+        1 => format!("tcall::<{}>", instr >> 4),
+        2 => format!(
+            "{}::<{}>",
+            if instr & 0x10 == 0 { "set1" } else { "clr1" },
+            instr >> 5,
+        ),
+        3 => format!(
+            "{}::<{}>",
+            if instr & 0x10 == 0 { "bbs" } else { "bbc" },
+            instr >> 5,
+        ),
+        4..=9 => {
+            let (first_op, second_op) = match instr & 0x1F {
+                0x04 => ("Reg(Reg::A)", "Direct"),
+                0x05 => ("Reg(Reg::A)", "Absolute"),
+                0x06 => ("Reg(Reg::A)", "X"),
+                0x07 => ("Reg(Reg::A)", "DirectXIndirect"),
+                0x08 => ("Reg(Reg::A)", "Immediate"),
+                0x09 => ("Mem(AddrMode::Direct)", "Direct"),
+                0x14 => ("Reg(Reg::A)", "DirectX"),
+                0x15 => ("Reg(Reg::A)", "AbsoluteX"),
+                0x16 => ("Reg(Reg::A)", "AbsoluteY"),
+                0x17 => ("Reg(Reg::A)", "DirectIndirectY"),
+                0x18 => ("Mem(AddrMode::Direct)", "Immediate"),
+                0x19 => ("Mem(AddrMode::X)", "Y"),
+                _ => unreachable!(),
+            };
+            let opcode = match instr >> 5 {
+                0 => "or",
+                1 => "and",
+                2 => "eor",
+                3 => "cmp",
+                4 => "adc",
+                5 => "sbc",
+                6 => {
+                    if instr & 0xE == 0x8 {
+                        return match instr & 0x11 {
+                            0 => "cmp::<{MemOrReg::Reg(Reg::X)}, {AddrMode::Immediate}>",
+                            1 => "mov_mem_reg::<{AddrMode::Absolute}, {Reg::X}>",
+                            0x10 => "mov_mem_reg::<{AddrMode::Direct}, {Reg::X}>",
+                            _ => "mov_mem_reg::<{AddrMode::DirectY}, {Reg::X}>",
+                        }
+                        .to_string();
+                    }
+                    return format!("mov_mem_reg::<{{AddrMode::{}}}, {{Reg::A}}>", second_op);
+                }
+                7 => {
+                    if instr & 0xE == 0x8 && instr != 0xE8 {
+                        return match instr & 0x11 {
+                            1 => "mov_reg_op::<{Reg::X}, {MemOrReg::Mem(AddrMode::Absolute)}>",
+                            0x10 => "mov_reg_op::<{Reg::X}, {MemOrReg::Mem(AddrMode::Direct)}>",
+                            _ => "mov_reg_op::<{Reg::X}, {MemOrReg::Mem(AddrMode::DirectY)}>",
+                        }
+                        .to_string();
+                    }
+                    return format!(
+                        "mov_reg_op::<{{Reg::A}}, {{MemOrReg::Mem(AddrMode::{})}}>",
+                        second_op
+                    );
+                }
+                _ => unreachable!(),
+            };
+            format!(
+                "{}::<{{MemOrReg::{}}}, {{AddrMode::{}}}>",
+                opcode, first_op, second_op
+            )
+        }
+        0xA => match instr >> 4 {
+            0x0 => "or1::<false>",
+            0x1 => "decw",
+            0x2 => "or1::<true>",
+            0x3 => "incw",
+            0x4 => "and1::<false>",
+            0x5 => "cmpw",
+            0x6 => "and1::<true>",
+            0x7 => "addw",
+            0x8 => "eor1",
+            0x9 => "subw",
+            0xA => "mov1_c_mem",
+            0xB => "movw_ya_direct",
+            0xC => "mov1_mem_c",
+            0xD => "movw_direct_ya",
+            0xE => "not1",
+            0xF => "mov_direct",
+            _ => unreachable!(),
+        }
+        .to_string(),
+        0xB..=0xC => {
+            let (operand_mem_or_reg, operand) = match instr & 0x1F {
+                0xB => ("Mem", "AddrMode::Direct"),
+                0xC => ("Mem", "AddrMode::Absolute"),
+                0x1B => ("Mem", "AddrMode::DirectX"),
+                0x1C => ("Reg", "Reg::A"),
+                _ => unreachable!(),
+            };
+            let opcode = match instr >> 5 {
+                0 => "asl",
+                1 => "rol",
+                2 => "lsr",
+                3 => "ror",
+                4 => "dec",
+                5 => "inc",
+                6 => {
+                    if instr == 0xDC {
+                        return "dec::<{MemOrReg::Reg(Reg::Y)}>".to_string();
+                    }
+                    return format!("mov_mem_reg::<{{{}}}, {{Reg::Y}}>", operand);
+                }
+                7 => {
+                    if instr == 0xFC {
+                        return "inc::<{MemOrReg::Reg(Reg::Y)}>".to_string();
+                    }
+                    return format!("mov_reg_op::<{{Reg::Y}}, {{MemOrReg::Mem({})}}>", operand);
+                }
+                _ => unreachable!(),
+            };
+            format!(
+                "{}::<{{MemOrReg::{}({})}}>",
+                opcode, operand_mem_or_reg, operand
+            )
+        }
+        _ => match instr {
+            0x0D => "push_psw",
+            0x1D => "dec::<{MemOrReg::Reg(Reg::X)}>",
+            0x2D => "push_reg::<{Reg::A}>",
+            0x3D => "inc::<{MemOrReg::Reg(Reg::X)}>",
+            0x4D => "push_reg::<{Reg::X}>",
+            0x5D => "mov_reg_op::<{Reg::X}, {MemOrReg::Reg(Reg::A)}>",
+            0x6D => "push_reg::<{Reg::Y}>",
+            0x7D => "mov_reg_op::<{Reg::A}, {MemOrReg::Reg(Reg::X)}>",
+            0x8D => "mov_reg_op::<{Reg::Y}, {MemOrReg::Mem(AddrMode::Immediate)}>",
+            0x9D => "mov_x_sp",
+            0xAD => "cmp::<{MemOrReg::Reg(Reg::Y)}, {AddrMode::Immediate}>",
+            0xBD => "mov_sp_x",
+            0xCD => "mov_reg_op::<{Reg::X}, {MemOrReg::Mem(AddrMode::Immediate)}>",
+            0xDD => "mov_reg_op::<{Reg::A}, {MemOrReg::Reg(Reg::Y)}>",
+            0xED => "notc",
+            0xFD => "mov_reg_op::<{Reg::Y}, {MemOrReg::Reg(Reg::A)}>",
+            0x0E => "tset1",
+            0x1E => "cmp::<{MemOrReg::Reg(Reg::X)}, {AddrMode::Absolute}>",
+            0x2E => "cbne_direct",
+            0x3E => "cmp::<{MemOrReg::Reg(Reg::X)}, {AddrMode::Direct}>",
+            0x4E => "tclr1",
+            0x5E => "cmp::<{MemOrReg::Reg(Reg::Y)}, {AddrMode::Absolute}>",
+            0x6E => "dbnz_direct",
+            0x7E => "cmp::<{MemOrReg::Reg(Reg::Y)}, {AddrMode::Direct}>",
+            0x8E => "pop_psw",
+            0x9E => "div",
+            0xAE => "pop_reg::<{Reg::A}>",
+            0xBE => "das",
+            0xCE => "pop_reg::<{Reg::X}>",
+            0xDE => "cbne_direct_x",
+            0xEE => "pop_reg::<{Reg::Y}>",
+            0xFE => "dbnz_y",
+            0x0F => "brk",
+            0x1F => "jmp_abs_x_indirect",
+            0x2F => "bra",
+            0x3F => "call",
+            0x4F => "pcall",
+            0x5F => "jmp_absolute",
+            0x6F => "ret",
+            0x7F => "reti",
+            0x8F => "mov_direct_imm",
+            0x9F => "xcn",
+            0xAF => "mov_mem_x_inc_a",
+            0xBF => "mov_a_mem_x_inc",
+            0xCF => "mul",
+            0xDF => "daa",
+            0xEF => "sleep",
+            0xFF => "stop",
+            _ => unreachable!(),
+        }
+        .to_string(),
+    });
+    output_instr_table("instr_table_spc700.rs", instrs)
+        .expect("Couldn't output SPC700 instruction table");
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     output_main_cpu_instr_table();
     output_main_cpu_disasm_instr_table();
+    output_spc700_instr_table();
 }

@@ -97,7 +97,7 @@ fn read_a_io<A: AccessType>(emu: &mut Emu, addr: u32) -> u8 {
     }
 
     #[cfg(feature = "log")]
-    if A::LOG {
+    if A::LOG && addr >> 16 != 0x24 {
         slog::warn!(
             emu.cpu.logger,
             "Unknown bus A IO {} read @ {:#08X} @ {:#08X}",
@@ -207,7 +207,7 @@ fn write_a_io<A: AccessType>(emu: &mut Emu, addr: u32, value: u8) {
     }
 
     #[cfg(feature = "log")]
-    if A::LOG {
+    if A::LOG && addr >> 16 != 0x24 {
         slog::warn!(
             emu.cpu.logger,
             "Unknown bus A IO {} write @ {:#08X}: {:#04X} @ {:#08X}",
@@ -248,7 +248,10 @@ pub fn read_b_io<A: AccessType>(emu: &mut Emu, addr: u8) -> u8 {
         0x3D => return emu.ppu.read_v_latched_counter::<A>(),
         0x3E => return emu.ppu.read_status77::<A>().0,
         0x3F => return emu.ppu.read_status78::<A>().0,
-        0x40..=0x7F => return rand::random(),
+        0x40..=0x7F => {
+            emu.apu.run(emu.schedule.cur_time);
+            return emu.apu.spc700.apu_to_cpu[addr as usize & 3];
+        }
         0x80 => return emu.wram.read_data::<A>(),
         _ => {}
     }
@@ -340,7 +343,10 @@ pub fn write_b_io<A: AccessType>(emu: &mut Emu, addr: u8, value: u8) {
                 .write_sub_backdrop_color(ppu::SubBackdropColorWrite(value));
         }
         0x33 => return emu.ppu.set_display_control_1(ppu::DisplayControl1(value)),
-        0x40..=0x7F => return,
+        0x40..=0x7F => {
+            emu.apu.run(emu.schedule.cur_time);
+            return emu.apu.spc700.cpu_to_apu[(addr & 3) as usize] = value;
+        }
         0x80 => return emu.wram.write_data(value),
         0x81 => {
             return emu
@@ -420,7 +426,7 @@ pub fn read<A: AccessType>(emu: &mut Emu, addr: u32) -> u8 {
     }
 
     #[cfg(feature = "log")]
-    if A::LOG {
+    if A::LOG && bank != 0x24 {
         slog::warn!(
             emu.cpu.logger,
             "Unknown bus A {} read @ {:#08X} @ {:#08X}",
@@ -470,7 +476,7 @@ pub fn write<A: AccessType>(emu: &mut Emu, addr: u32, value: u8) {
     }
 
     #[cfg(feature = "log")]
-    if A::LOG {
+    if A::LOG && bank != 0x24 {
         slog::warn!(
             emu.cpu.logger,
             "Unknown bus A {} write @ {:#08X}: {:#04X} @ {:#08X}",

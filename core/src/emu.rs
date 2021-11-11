@@ -1,4 +1,5 @@
 use crate::{
+    apu::Apu,
     cart::Cart,
     controllers::Controllers,
     cpu::Cpu,
@@ -11,6 +12,7 @@ pub struct Emu {
     pub cpu: Cpu,
     pub wram: Wram,
     pub schedule: Schedule,
+    pub apu: Apu,
     pub ppu: Ppu,
     pub cart: Cart,
     pub controllers: Controllers,
@@ -25,6 +27,10 @@ impl Emu {
                 logger.new(slog::o!("cpu" => "")),
             ),
             wram: Wram::new(),
+            apu: Apu::new(
+                #[cfg(feature = "log")]
+                logger,
+            ),
             ppu: Ppu::new(model, &mut schedule),
             cart,
             controllers: Controllers::new(&mut schedule),

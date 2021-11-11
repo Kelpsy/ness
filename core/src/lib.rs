@@ -13,6 +13,7 @@ pub mod ppu;
 pub mod schedule;
 mod wram;
 pub use wram::Wram;
+pub mod apu;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
