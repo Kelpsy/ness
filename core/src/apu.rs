@@ -1,10 +1,13 @@
+pub mod dsp;
 pub mod spc700;
 
 use crate::schedule::Timestamp;
+use dsp::Dsp;
 use spc700::Spc700;
 
 pub struct Apu {
     pub spc700: Spc700,
+    pub dsp: Dsp,
 }
 
 impl Apu {
@@ -13,6 +16,10 @@ impl Apu {
             spc700: Spc700::new(
                 #[cfg(feature = "log")]
                 logger.new(slog::o!("spc700" => "")),
+            ),
+            dsp: Dsp::new(
+                #[cfg(feature = "log")]
+                logger.new(slog::o!("dsp" => "")),
             ),
         }
     }

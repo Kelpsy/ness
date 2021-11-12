@@ -42,6 +42,7 @@ pub fn read<A: AccessType>(apu: &mut Apu, addr: u16) -> u8 {
             0
         }
         0x00F2 => apu.spc700.dsp_reg_index,
+        0x00F3 => apu.dsp.read_reg(apu.spc700.dsp_reg_index),
         0x00F4..=0x00F7 => apu.spc700.cpu_to_apu[addr as usize & 3],
         0x00FD => apu.spc700.timers[0].read_up_counter::<A>(apu.spc700.cur_timestamp),
         0x00FE => apu.spc700.timers[1].read_up_counter::<A>(apu.spc700.cur_timestamp),
@@ -71,6 +72,7 @@ pub fn write<A: AccessType>(apu: &mut Apu, addr: u16, value: u8) {
             .spc700
             .set_control(Control(value), apu.spc700.cur_timestamp),
         0x00F2 => apu.spc700.dsp_reg_index = value,
+        0x00F3 => apu.dsp.write_reg(apu.spc700.dsp_reg_index, value),
         0x00F4..=0x00F7 => apu.spc700.apu_to_cpu[addr as usize & 3] = value,
         0x00FA => apu.spc700.timers[0].set_internal_counter_max(value, apu.spc700.cur_timestamp),
         0x00FB => apu.spc700.timers[1].set_internal_counter_max(value, apu.spc700.cur_timestamp),
