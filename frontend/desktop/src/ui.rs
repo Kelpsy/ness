@@ -17,6 +17,8 @@ use ness_core::{
 };
 use parking_lot::RwLock;
 use rfd::FileDialog;
+#[cfg(feature = "discord-presence")]
+use std::time::SystemTime;
 use std::{
     env,
     fs::{self, File},
@@ -102,6 +104,13 @@ struct UiState {
 
     emu_thread: Option<thread::JoinHandle<triple_buffer::Sender<FrameData>>>,
     emu_shared_state: Option<Arc<emu::SharedState>>,
+
+    #[cfg(feature = "discord-presence")]
+    rpc_connection: discord_rpc::Rpc,
+    #[cfg(feature = "discord-presence")]
+    presence: discord_rpc::Presence,
+    #[cfg(feature = "discord-presence")]
+    presence_updated: bool,
 }
 
 impl UiState {
@@ -109,8 +118,28 @@ impl UiState {
         self.message_tx.send(msg).expect("Couldn't send UI message");
     }
 
-    fn start(&mut self, config: LaunchConfig, rom: BoxedByteSlice, cart_info: cart::info::Info) {
+    fn start(
+        &mut self,
+        config: LaunchConfig,
+        game_title: String,
+        game_config: Config<config::Game>,
+        rom: BoxedByteSlice,
+        cart_info: cart::info::Info,
+    ) {
         self.stop();
+
+        #[cfg(feature = "discord-presence")]
+        {
+            self.presence.state = Some(format!("Playing {}", game_title));
+            self.presence.timestamps = Some(discord_rpc::Timestamps {
+                start: Some(SystemTime::now()),
+                end: None,
+            });
+            self.presence_updated = true;
+        }
+
+        self.game_title = Some(game_title);
+        self.game_config = Some(game_config);
 
         let ram = if let Some(path) = config.cur_save_path.as_deref() {
             match File::open(&path) {
@@ -188,6 +217,16 @@ impl UiState {
     }
 
     fn stop(&mut self) {
+        #[cfg(feature = "discord-presence")]
+        {
+            self.presence.state = Some("Not playing anything".to_string());
+            self.presence.timestamps = Some(discord_rpc::Timestamps {
+                start: Some(SystemTime::now()),
+                end: None,
+            });
+            self.presence_updated = true;
+        }
+
         if let Some(emu_thread) = self.emu_thread.take() {
             self.send_message(emu::Message::Stop);
             self.frame_tx = Some(emu_thread.join().expect("Couldn't join emulation thread"));
@@ -199,7 +238,17 @@ impl UiState {
             }
             let _ = game_config.flush();
         }
+        self.game_title = None;
         self.playing = false;
+    }
+
+    #[cfg(feature = "discord-presence")]
+    fn flush_presence(&mut self) {
+        if !self.presence_updated {
+            return;
+        }
+        self.presence_updated = false;
+        self.rpc_connection.update_presence(Some(&self.presence));
     }
 }
 
@@ -335,50 +384,69 @@ pub fn main() {
     };
     clear_fb_texture(fb_texture_id, &mut window_builder.window);
 
+    let mut state = UiState {
+        game_config: None,
+        game_title: None,
+        cart_db,
+
+        playing: false,
+        limit_framerate: config::RuntimeModifiable::global(global_config.contents.limit_framerate),
+
+        screen_focused: true,
+        input: input::State::new(),
+
+        show_menu_bar: true,
+
+        #[cfg(feature = "log")]
+        imgui_log,
+        #[cfg(feature = "log")]
+        logger,
+
+        frame_tx: Some(frame_tx),
+        frame_rx,
+        fps_fixed: None,
+        fb_texture_id,
+        fb_view_height: VIEW_HEIGHT_NTSC,
+        fb_width: FB_WIDTH,
+        fb_height: FB_HEIGHT,
+
+        #[cfg(feature = "debug-views")]
+        debug_views: debug_views::UiState::new(),
+
+        message_tx,
+        message_rx,
+
+        emu_thread: None,
+        emu_shared_state: None,
+
+        global_config,
+
+        #[cfg(feature = "discord-presence")]
+        rpc_connection: discord_rpc::Rpc::new(
+            "908734717455663164".to_string(),
+            Default::default(),
+            false,
+        ),
+        #[cfg(feature = "discord-presence")]
+        presence: Default::default(),
+        #[cfg(feature = "discord-presence")]
+        presence_updated: true,
+    };
+
+    state.stop();
+
     window_builder.run(
-        UiState {
-            game_config: None,
-            game_title: None,
-            cart_db,
-
-            playing: false,
-            limit_framerate: config::RuntimeModifiable::global(
-                global_config.contents.limit_framerate,
-            ),
-
-            screen_focused: true,
-            input: input::State::new(),
-
-            show_menu_bar: true,
-
-            #[cfg(feature = "log")]
-            imgui_log,
-            #[cfg(feature = "log")]
-            logger,
-
-            frame_tx: Some(frame_tx),
-            frame_rx,
-            fps_fixed: None,
-            fb_texture_id,
-            fb_view_height: VIEW_HEIGHT_NTSC,
-            fb_width: FB_WIDTH,
-            fb_height: FB_HEIGHT,
-
-            #[cfg(feature = "debug-views")]
-            debug_views: debug_views::UiState::new(),
-
-            message_tx,
-            message_rx,
-
-            emu_thread: None,
-            emu_shared_state: None,
-
-            global_config,
-        },
+        state,
         |_, state, event| {
             state.input.process_event(event, state.screen_focused);
         },
         move |window, ui, state| {
+            #[cfg(feature = "discord-presence")]
+            {
+                state.rpc_connection.check_events();
+                state.flush_presence();
+            }
+
             if state.emu_thread.is_some() {
                 if let Ok(frame) = state.frame_rx.get() {
                     #[cfg(feature = "debug-views")]
@@ -553,9 +621,13 @@ pub fn main() {
                                     &game_title,
                                 ) {
                                     Ok(launch_config) => {
-                                        state.game_title = Some(game_title);
-                                        state.game_config = Some(game_config);
-                                        state.start(launch_config, rom, cart_info);
+                                        state.start(
+                                            launch_config,
+                                            game_title,
+                                            game_config,
+                                            rom,
+                                            cart_info,
+                                        );
                                     }
                                     Err(errors) => {
                                         config_error!(

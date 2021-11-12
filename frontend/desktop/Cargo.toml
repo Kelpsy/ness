@@ -5,10 +5,11 @@ edition = "2021"
 publish = false
 
 [features]
-default = ["debug-views", "log"]
+default = ["debug-views", "log", "discord-presence"]
 
 debug-views = ["fxhash", "bitflags", "ness-core/disasm"]
 log = ["slog", "slog-term", "slog-async", "ness-core/log"]
+discord-presence = ["discord-rpc"]
 
 compile-shaders = ["shaderc"]
 
@@ -31,6 +32,7 @@ rfd = "0.5"
 home = "0.5"
 sha2 = "0.9"
 parking_lot = "0.11"
+discord-rpc = { git = "https://github.com/Kelpsy/discord-rpc", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.24" # TODO: Remove when https://github.com/rust-windowing/winit/issues/2022 is closed
