@@ -44,7 +44,7 @@ pub(super) fn main(
             Some(data) => Box::new(audio::Sender::new(data, config.sync_to_audio.value)),
             None => Box::new(DummyAudioBackend),
         },
-        512, // TODO: Make configurable?
+        4, // TODO: Make configurable?
         #[cfg(feature = "log")]
         &logger,
     );
@@ -65,6 +65,20 @@ pub(super) fn main(
 
     #[cfg(feature = "debug-views")]
     let mut debug_views = debug_views::EmuState::new();
+
+    macro_rules! save {
+        ($save_path: expr) => {
+            if emu.cart.ram_modified()
+                && $save_path
+                    .parent()
+                    .map(|parent| fs::create_dir_all(parent).is_ok())
+                    .unwrap_or(true)
+                && fs::write($save_path, &emu.cart.ram()[..]).is_ok()
+            {
+                emu.cart.mark_ram_flushed();
+            }
+        };
+    }
 
     'outer: loop {
         for message in message_rx.try_iter() {
@@ -127,15 +141,7 @@ pub(super) fn main(
             let now = Instant::now();
             if now - last_save_flush_time >= *shared_state.autosave_interval.read() {
                 last_save_flush_time = now;
-                if emu.cart.ram_modified()
-                    && save_path
-                        .parent()
-                        .map(|parent| fs::create_dir_all(parent).is_ok())
-                        .unwrap_or(true)
-                    && fs::write(save_path, &emu.cart.ram()[..]).is_ok()
-                {
-                    emu.cart.mark_ram_flushed();
-                }
+                save!(save_path);
             }
         }
 
@@ -156,6 +162,10 @@ pub(super) fn main(
                 last_frame_time = now;
             }
         }
+    }
+
+    if let Some(save_path) = &cur_save_path {
+        save!(save_path);
     }
 
     frame_tx

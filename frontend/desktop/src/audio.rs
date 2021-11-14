@@ -59,13 +59,14 @@ impl Sender {
 impl ness_core::apu::dsp::Backend for Sender {
     fn handle_sample_chunk(&mut self, samples: &[[Sample; 2]]) {
         if self.sync {
-            let max_distance = BUFFER_CAPACITY - samples.len();
             // Wait until enough samples have been played
             while self
-                .write_pos
-                .wrapping_sub(self.buffer.read_pos.load(Ordering::Relaxed))
+                .buffer
+                .read_pos
+                .load(Ordering::Relaxed)
+                .wrapping_sub(self.write_pos)
                 & BUFFER_MASK
-                > max_distance
+                <= samples.len()
             {
                 spin_loop();
             }
@@ -76,7 +77,7 @@ impl ness_core::apu::dsp::Backend for Sender {
                 Ordering::Relaxed,
                 Ordering::Relaxed,
                 |read_pos| {
-                    if read_pos.wrapping_sub(self.write_pos) & BUFFER_MASK < samples.len() {
+                    if read_pos.wrapping_sub(self.write_pos) & BUFFER_MASK <= samples.len() {
                         Some((self.write_pos + samples.len() + 1) & BUFFER_MASK)
                     } else {
                         None
@@ -106,10 +107,11 @@ impl Receiver {
             self.buffer
                 .read_pos
                 .fetch_update(Ordering::AcqRel, Ordering::Acquire, |read_pos| {
-                    if read_pos == self.buffer.write_pos.load(Ordering::Acquire) {
+                    let new = (read_pos + 1) & BUFFER_MASK;
+                    if new == self.buffer.write_pos.load(Ordering::Acquire) {
                         None
                     } else {
-                        Some((read_pos + 1) & BUFFER_MASK)
+                        Some(new)
                     }
                 })
         {

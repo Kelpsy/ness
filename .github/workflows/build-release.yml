@@ -45,9 +45,11 @@ jobs:
           target/
         key: ${{ matrix.os }}-release
 
-    - name: Install GTK
+    - name: Install GTK and ALSA
       if: ${{ matrix.os == 'ubuntu-latest' }}
-      run: sudo apt-get install libgtk-3-dev
+      run: |
+        sudo apt-get update
+        sudo apt-get install libgtk-3-dev libasound2-dev
 
     - name: Build release binary (no debugging features)
       run: cargo build --profile ci --verbose --no-default-features
