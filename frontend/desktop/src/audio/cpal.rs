@@ -4,10 +4,8 @@ use cpal::{
     default_host,
     platform::Stream,
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    BufferSize, Sample, SampleFormat, SupportedBufferSize,
+    Sample, SampleFormat,
 };
-
-const BUFFER_SIZE: u32 = 512;
 
 pub struct OutputStream {
     _stream: Stream,
@@ -20,15 +18,7 @@ impl OutputStream {
         let supported_output_config = output_device
             .supported_output_configs()
             .expect("Couldn't enumerate audio output device configs")
-            .find(|config| {
-                config.channels() == 2
-                    && match config.buffer_size() {
-                        SupportedBufferSize::Range { min, max } => {
-                            (*min..*max).contains(&BUFFER_SIZE)
-                        }
-                        SupportedBufferSize::Unknown => false,
-                    }
-            })?
+            .find(|config| config.channels() == 2)?
             .with_max_sample_rate();
 
         let output_sample_rate = supported_output_config.sample_rate().0 as f64;
@@ -43,8 +33,6 @@ impl OutputStream {
             fract: 0.0,
         };
 
-        let mut config = supported_output_config.config();
-        config.buffer_size = BufferSize::Fixed(BUFFER_SIZE);
         let err_callback = |err| panic!("Error in default audio output device stream: {}", err);
         let stream = match supported_output_config.sample_format() {
             SampleFormat::U16 => output_device.build_output_stream(

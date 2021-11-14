@@ -78,7 +78,9 @@ impl GfxDeviceState {
         self.sc_needs_rebuild = false;
         self.surf_config.width = size.width;
         self.surf_config.height = size.height;
-        self.surface.configure(&self.device, &self.surf_config);
+        if size.width != 0 && size.height != 0 {
+            self.surface.configure(&self.device, &self.surf_config);
+        }
     }
 
     pub fn update_format_and_rebuild_swapchain(&mut self, size: PhysicalSize<u32>) {
