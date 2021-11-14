@@ -1,8 +1,9 @@
-#![feature(step_trait, once_cell, hash_drain_filter)]
+#![feature(step_trait, once_cell, hash_drain_filter, new_uninit)]
 
 #[macro_use]
 mod utils;
 
+mod audio;
 mod config;
 #[cfg(feature = "debug-views")]
 mod debug_views;

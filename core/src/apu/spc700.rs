@@ -51,7 +51,7 @@ impl Spc700 {
             timers: [Timer::new(7), Timer::new(7), Timer::new(4)],
             cpu_to_apu: [0; 4],
             apu_to_cpu: [0; 4],
-            dsp_reg_index: 0,
+            dsp_reg_index: 0xFF,
         }
     }
 

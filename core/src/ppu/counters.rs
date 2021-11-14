@@ -222,6 +222,8 @@ impl Counters {
                     self.scheduled_hv_irq_time = Some(new_irq_time);
                     schedule.schedule_event(event_slots::HV_IRQ, new_irq_time);
                 }
+            } else {
+                self.scheduled_hv_irq_time = None;
             }
         }
     }

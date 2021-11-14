@@ -38,14 +38,18 @@ pub(super) fn clv(emu: &mut Emu) {
 pub(super) fn sep(emu: &mut Emu) {
     let mask = consume_imm::<u8>(emu);
     emu.cpu.regs.set_psw(Psw(emu.cpu.regs.psw.0 | mask));
-    emu.cpu.irqs.set_irqs_enabled(!emu.cpu.regs.psw.irqs_disabled(), &mut emu.schedule);
+    emu.cpu
+        .irqs
+        .set_irqs_enabled(!emu.cpu.regs.psw.irqs_disabled(), &mut emu.schedule);
     add_io_cycles(emu, 1);
 }
 
 pub(super) fn rep(emu: &mut Emu) {
     let mask = consume_imm::<u8>(emu);
     emu.cpu.regs.set_psw(Psw(emu.cpu.regs.psw.0 & !mask));
-    emu.cpu.irqs.set_irqs_enabled(!emu.cpu.regs.psw.irqs_disabled(), &mut emu.schedule);
+    emu.cpu
+        .irqs
+        .set_irqs_enabled(!emu.cpu.regs.psw.irqs_disabled(), &mut emu.schedule);
     add_io_cycles(emu, 1);
 }
 
@@ -61,7 +65,9 @@ pub(super) fn rti(emu: &mut Emu) {
     let new_pc = pull::<u16>(emu);
     let new_code_bank = pull::<u8>(emu);
     emu.cpu.regs.set_psw(Psw(new_psw));
-    emu.cpu.irqs.set_irqs_enabled(!emu.cpu.regs.psw.irqs_disabled(), &mut emu.schedule);
+    emu.cpu
+        .irqs
+        .set_irqs_enabled(!emu.cpu.regs.psw.irqs_disabled(), &mut emu.schedule);
     emu.cpu.regs.pc = new_pc;
     emu.cpu.regs.set_code_bank(new_code_bank);
 }
@@ -87,7 +93,7 @@ pub(super) fn nop(emu: &mut Emu) {
 pub(super) fn wai(emu: &mut Emu) {
     emu.cpu.irqs.set_waiting_for_exception(true);
     if emu.cpu.irqs.waiting_for_exception() {
-        emu.schedule.forward_to_target();
+        emu.schedule.set_target_to_cur();
     }
 }
 
@@ -107,7 +113,7 @@ pub(super) fn stp(emu: &mut Emu) {
         emu.cpu.regs.pc.wrapping_sub(1) as u32 | emu.cpu.regs.code_bank_base()
     );
     emu.cpu.stopped = true;
-    emu.schedule.forward_to_target();
+    emu.schedule.set_target_to_cur();
 }
 
 pub(super) fn wdm(emu: &mut Emu) {

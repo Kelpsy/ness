@@ -37,11 +37,11 @@ static INSTR_TABLE: [fn(&mut Emu); 0x800] =
 
 #[inline]
 pub fn run_until_next_event(emu: &mut Emu) {
-    while emu.schedule.cur_time < emu.schedule.schedule.next_event_time() {
-        emu.schedule.target_time = emu.schedule.schedule.next_event_time();
+    while emu.schedule.cur_time < emu.schedule.next_event_time() {
         if let Some(channel) = emu.cpu.dmac.cur_channel {
             dma::Controller::run_dma(emu, channel);
         } else {
+            emu.schedule.target_time = emu.schedule.next_event_time();
             if emu.cpu.stopped || emu.cpu.irqs.waiting_for_exception() {
                 emu.schedule.cur_time +=
                     (emu.schedule.target_time - emu.schedule.cur_time + 5) / 6 * 6;

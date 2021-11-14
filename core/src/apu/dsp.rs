@@ -1,166 +1,169 @@
-#[derive(Clone, Copy, Debug)]
-pub struct Channel {
-    pub volume: [i8; 2],
-    pub pitch: u16,
-    pub source_number: u8,
-    pub adsr_1: u8,
-    pub adsr_2: u8,
-    pub gain: u8,
+pub mod channel;
+mod freq_counter;
+mod io;
+use freq_counter::FreqCounter;
+
+use super::Apu;
+use crate::utils::bitfield_debug;
+use channel::{Channel, Index};
+
+pub type Sample = i16;
+
+pub trait Backend {
+    fn handle_sample_chunk(&mut self, samples: &[[Sample; 2]]);
+}
+
+pub struct DummyBackend;
+
+impl Backend for DummyBackend {
+    fn handle_sample_chunk(&mut self, _samples: &[[Sample; 2]]) {}
+}
+
+bitfield_debug! {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub struct Flags(pub u8) {
+        pub noise_freq: u8 @ 0..=4,
+        pub write_to_echo_buffer: bool @ 5,
+        pub mute_amplifier: bool @ 6,
+        pub soft_reset: bool @ 7,
+    }
 }
 
 pub struct Dsp {
     #[cfg(feature = "log")]
     logger: slog::Logger,
+    pub backend: Box<dyn Backend>,
+    sample_chunk_len: usize,
+    sample_chunk: Vec<[Sample; 2]>,
+
     pub channels: [Channel; 8],
-    pub fir_coeffs: [i8; 8],
     pub main_volume: [i8; 2],
-    pub echo_volume: [i8; 2],
-    pub key_on: u8,
-    pub key_off: u8,
-    pub flags: u8,
-    pub ended_channels: u8,
-    pub echo_feedback: i8,
+    pub flags: Flags,
     pub unused: u8,
     pub pitch_mod_mask: u8,
+    pub sample_table_base: u8,
+
+    pub key_on: u8,
+    pub key_off: u8,
+    internal_key_on: u8,
+    internal_key_off: u8,
+
+    ended_channels: u8,
+
     pub noise_mask: u8,
-    pub echo_mask: u8,
-    pub source_directory_off: u8,
-    pub echo_buffer_off: u8,
-    pub echo_delay: u8,
+    noise_value: i16,
+    noise_counter: FreqCounter,
+
+    pub echo_volume: [i8; 2],
+    pub echo_feedback_volume: i8,
+    pub echo_channel_mask: u8,
+    pub echo_buffer_base: u8,
+    pub echo_buffer_len: u8,
+    pub echo_fir_coeffs: [i8; 8],
 }
 
 impl Dsp {
-    pub(crate) fn new(#[cfg(feature = "log")] logger: slog::Logger) -> Self {
+    pub(crate) fn new(
+        backend: Box<dyn Backend>,
+        sample_chunk_len: usize,
+        #[cfg(feature = "log")] logger: slog::Logger,
+    ) -> Self {
         Dsp {
             #[cfg(feature = "log")]
             logger,
-            channels: [Channel {
-                volume: [0; 2],
-                pitch: 0,
-                source_number: 0,
-                adsr_1: 0,
-                adsr_2: 0,
-                gain: 0,
-            }; 8],
-            fir_coeffs: [0; 8],
+            backend,
+            sample_chunk_len,
+            sample_chunk: Vec::new(),
+
+            channels: [Channel::new(); 8],
             main_volume: [0; 2],
-            echo_volume: [0; 2],
-            key_on: 0,
-            key_off: 0,
-            flags: 0,
-            ended_channels: 0,
-            echo_feedback: 0,
+            flags: Flags(0),
             unused: 0,
             pitch_mod_mask: 0,
+            sample_table_base: 0,
+
+            key_on: 0,
+            key_off: 0,
+            internal_key_on: 0,
+            internal_key_off: 0,
+
+            ended_channels: 0,
+
             noise_mask: 0,
-            echo_mask: 0,
-            source_directory_off: 0,
-            echo_buffer_off: 0,
-            echo_delay: 0,
+            noise_value: -0x4000,
+            noise_counter: FreqCounter::new(),
+
+            echo_volume: [0; 2],
+            echo_feedback_volume: 0,
+            echo_channel_mask: 0,
+            echo_buffer_base: 0,
+            echo_buffer_len: 0,
+            echo_fir_coeffs: [0; 8],
         }
     }
 
-    pub fn read_reg(&self, mut index: u8) -> u8 {
-        index &= 0x7F;
-        let i = (index >> 4) as usize;
-        match index & 0xF {
-            0 => self.channels[i].volume[0] as u8,
-            1 => self.channels[i].volume[1] as u8,
-            2 => self.channels[i].pitch as u8,
-            3 => (self.channels[i].pitch >> 8) as u8,
-            4 => self.channels[i].source_number,
-            5 => self.channels[i].adsr_1,
-            6 => self.channels[i].adsr_2,
-            7 => self.channels[i].gain,
-            8 => {
-                #[cfg(feature = "log")]
-                slog::info!(self.logger, "ENVX read @ {:#04X}", index);
-                0
+    pub(super) fn output_sample(apu: &mut Apu) {
+        if apu.dsp_timestamp & 1 == 0 && apu.dsp.internal_key_on | apu.dsp.internal_key_off != 0 {
+            for i in 0..8 {
+                if apu.dsp.internal_key_off & 1 << i != 0 {
+                    Channel::set_enabled::<false>(apu, Index::new(i));
+                } else if apu.dsp.internal_key_on & 1 << i != 0 {
+                    Channel::set_enabled::<true>(apu, Index::new(i));
+                }
             }
-            9 => {
-                #[cfg(feature = "log")]
-                slog::info!(self.logger, "OUTX read @ {:#04X}", index);
-                0
-            }
-            0xC => match i {
-                0x0 => self.main_volume[0] as u8,
-                0x1 => self.main_volume[1] as u8,
-                0x2 => self.echo_volume[0] as u8,
-                0x3 => self.echo_volume[1] as u8,
-                0x4 => self.key_on,
-                0x5 => self.key_off,
-                0x6 => self.flags,
-                _ => self.ended_channels,
-            },
-            0xD => match i {
-                0x0 => self.echo_feedback as u8,
-                0x1 => self.unused,
-                0x2 => self.pitch_mod_mask,
-                0x3 => self.noise_mask,
-                0x4 => self.echo_mask,
-                0x5 => self.source_directory_off,
-                0x6 => self.echo_buffer_off,
-                _ => self.echo_delay,
-            },
-            0xF => self.fir_coeffs[i] as u8,
-            _ => {
-                #[cfg(feature = "log")]
-                slog::info!(self.logger, "Read from unknown register @ {:#04X}", index);
-                0
-            }
+            apu.dsp.internal_key_on = 0;
+            apu.dsp.internal_key_off = 0;
         }
-    }
 
-    pub fn write_reg(&mut self, index: u8, value: u8) {
-        if index >= 0x80 {
-            #[cfg(feature = "log")]
-            slog::warn!(
-                self.logger,
-                "Write to read-only register mirror {:#04X}",
-                index
-            );
-            return;
+        if apu.dsp.noise_counter.needs_update(apu.dsp_timestamp) {
+            let prev = apu.dsp.noise_value as u16;
+            apu.dsp.noise_value = ((prev & 0x7FFE) | ((prev ^ prev >> 1) & 1) << 15) as i16 >> 1;
         }
-        let i = (index >> 4 & 7) as usize;
-        match index & 0xF {
-            0 => self.channels[i].volume[0] = value as i8,
-            1 => self.channels[i].volume[1] = value as i8,
-            2 => self.channels[i].pitch = (self.channels[i].pitch & 0xFF00) | value as u16,
-            3 => self.channels[i].pitch = (self.channels[i].pitch & 0xFF) | (value as u16) << 8,
-            4 => self.channels[i].source_number = value,
-            5 => self.channels[i].adsr_1 = value,
-            6 => self.channels[i].adsr_2 = value,
-            7 => self.channels[i].gain = value,
-            0xC => match i {
-                0x0 => self.main_volume[0] = value as i8,
-                0x1 => self.main_volume[1] = value as i8,
-                0x2 => self.echo_volume[0] = value as i8,
-                0x3 => self.echo_volume[1] = value as i8,
-                0x4 => self.key_on = value,
-                0x5 => self.key_off = value,
-                0x6 => self.flags = value,
-                _ => self.ended_channels = 0,
-            },
-            0xD => match i {
-                0x0 => self.echo_feedback = value as i8,
-                0x1 => self.unused = value,
-                0x2 => self.pitch_mod_mask = value,
-                0x3 => self.noise_mask = value,
-                0x4 => self.echo_mask = value,
-                0x5 => self.source_directory_off = value,
-                0x6 => self.echo_buffer_off = value,
-                _ => self.echo_delay = value,
-            },
-            0xF => self.fir_coeffs[i] = value as i8,
-            _ => {
-                #[cfg(feature = "log")]
-                slog::info!(
-                    self.logger,
-                    "Write to unknown register @ {:#04X}: {:#04X}",
-                    index,
-                    value,
-                );
+
+        let mut prev_output = 0_i16;
+        let mut left_output = 0_i16;
+        let mut right_output = 0_i16;
+
+        for i in 0..8 {
+            let i_ = Index::new(i as u8);
+            let stopped = Channel::check_stopped(apu, i_);
+            if stopped {
+                Channel::update_stopped(apu, i_);
+            } else {
+                let output = Channel::output_sample(apu, i_);
+                let channel = &mut apu.dsp.channels[i];
+                left_output = left_output
+                    .saturating_add(((output as i32 * channel.volume[0] as i32) >> 6) as i16);
+                right_output = right_output
+                    .saturating_add(((output as i32 * channel.volume[1] as i32) >> 6) as i16);
+                let mut step = channel.pitch & 0x3FFF;
+                if (apu.dsp.pitch_mod_mask & !1) & 1 << i != 0 {
+                    step = ((step as u32 * ((prev_output >> 4) + 0x400) as u32) >> 10).min(0x3FFF)
+                        as u16;
+                }
+                let (new_counter, overflowed) = channel.pitch_counter.overflowing_add(step);
+                channel.pitch_counter = new_counter;
+                prev_output = output;
+                if overflowed {
+                    Channel::read_next_brr_block(apu, i_);
+                }
             }
+        }
+
+        if apu.dsp.flags.mute_amplifier() {
+            left_output = -1;
+            right_output = -1;
+        } else {
+            left_output = !(((left_output as i32 * apu.dsp.main_volume[0] as i32) >> 7) as i16);
+            right_output = !(((right_output as i32 * apu.dsp.main_volume[1] as i32) >> 7) as i16);
+        }
+
+        apu.dsp.sample_chunk.push([left_output, right_output]);
+        if apu.dsp.sample_chunk.len() >= apu.dsp.sample_chunk_len {
+            apu.dsp
+                .backend
+                .handle_sample_chunk(&apu.dsp.sample_chunk[..]);
+            apu.dsp.sample_chunk.clear();
         }
     }
 }

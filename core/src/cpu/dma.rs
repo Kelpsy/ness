@@ -128,7 +128,7 @@ impl Controller {
         self.gp_requested = value;
         self.select_next_channel();
         if self.cur_channel.is_some() {
-            schedule.target_time = schedule.cur_time;
+            schedule.set_target_to_cur();
         }
     }
 

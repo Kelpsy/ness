@@ -18,7 +18,7 @@ impl Timer {
             cycle_shift,
             internal_counter: 0,
             up_counter: 0,
-            internal_counter_max: 256,
+            internal_counter_max: 0xFF,
             last_update: 0,
         }
     }

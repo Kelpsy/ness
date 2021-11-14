@@ -7,6 +7,7 @@ pub mod window;
 #[cfg(feature = "debug-views")]
 use super::debug_views;
 use super::{
+    audio,
     config::{self, Config, LaunchConfig, LoggingKind},
     emu, input, triple_buffer, utils, FrameData,
 };
@@ -83,6 +84,9 @@ struct UiState {
     screen_focused: bool,
     input: input::State,
 
+    audio_channel: Option<audio::Channel>,
+    sync_to_audio: config::RuntimeModifiable<bool>,
+
     #[cfg(feature = "log")]
     imgui_log: Option<(imgui_log::Console, imgui_log::Sender, bool)>,
     #[cfg(feature = "log")]
@@ -141,6 +145,8 @@ impl UiState {
         self.game_title = Some(game_title);
         self.game_config = Some(game_config);
 
+        self.sync_to_audio = config.sync_to_audio;
+
         let ram = if let Some(path) = config.cur_save_path.as_deref() {
             match File::open(&path) {
                 Ok(mut ram_file) => {
@@ -185,6 +191,7 @@ impl UiState {
 
         let frame_tx = self.frame_tx.take().unwrap();
         let message_rx = self.message_rx.clone();
+        let audio_tx_data = self.audio_channel.as_ref().map(|c| c.tx_data.clone());
 
         self.playing = !config.pause_on_launch;
         let emu_shared_state = Arc::new(emu::SharedState {
@@ -202,6 +209,7 @@ impl UiState {
                     emu::main(
                         config,
                         cart,
+                        audio_tx_data,
                         frame_tx,
                         message_rx,
                         emu_shared_state,
@@ -339,6 +347,8 @@ pub fn main() {
         global_config.contents.imgui_config_path.clone(),
     ));
 
+    let audio_channel = audio::channel(global_config.contents.audio_interp_method);
+
     let (frame_tx, frame_rx) = triple_buffer::init([
         FrameData::default(),
         FrameData::default(),
@@ -394,6 +404,9 @@ pub fn main() {
 
         screen_focused: true,
         input: input::State::new(),
+
+        audio_channel,
+        sync_to_audio: config::RuntimeModifiable::global(global_config.contents.sync_to_audio),
 
         show_menu_bar: true,
 
@@ -662,6 +675,23 @@ pub fn main() {
                                     .limit_framerate
                                     .store(state.limit_framerate.value, Ordering::Relaxed);
                             }
+                        }
+
+                        if imgui::MenuItem::new("Sync to audio")
+                            .build_with_ref(ui, &mut state.sync_to_audio.value)
+                        {
+                            if state.sync_to_audio.origin == config::SettingOrigin::Game {
+                                let game_config = state.game_config.as_mut().unwrap();
+                                game_config.contents.sync_to_audio =
+                                    Some(state.sync_to_audio.value);
+                                game_config.dirty = true;
+                            }
+                            state.global_config.contents.sync_to_audio = state.sync_to_audio.value;
+                            state.global_config.dirty = true;
+                            state
+                                .message_tx
+                                .send(emu::Message::UpdateAudioSync(state.sync_to_audio.value))
+                                .expect("Couldn't send UI message");
                         }
 
                         if imgui::MenuItem::new("Fullscreen render")

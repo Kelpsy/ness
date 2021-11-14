@@ -1,10 +1,13 @@
 mod saves;
 
+use super::{
+    audio,
+    utils::{config_base, data_base},
+};
 use ness_core::{
     cart::info::header::{Header as CartHeader, Region},
     Model,
 };
-use super::utils::{config_base, data_base};
 use saves::{save_path, SavePathConfig};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -32,6 +35,8 @@ pub enum ModelConfig {
 pub struct Global {
     pub model: ModelConfig,
     pub limit_framerate: bool,
+    pub sync_to_audio: bool,
+    pub audio_interp_method: audio::InterpMethod,
     pub pause_on_launch: bool,
     pub autosave_interval_ms: f32,
     pub save_dir_path: PathBuf,
@@ -51,6 +56,8 @@ impl Default for Global {
         Global {
             model: ModelConfig::Auto,
             limit_framerate: true,
+            sync_to_audio: true,
+            audio_interp_method: audio::InterpMethod::Nearest,
             pause_on_launch: false,
             autosave_interval_ms: 1000.0,
             save_dir_path: data_base.join("saves"),
@@ -70,6 +77,8 @@ impl Default for Global {
 pub struct Game {
     pub model: Option<ModelConfig>,
     pub limit_framerate: Option<bool>,
+    pub sync_to_audio: Option<bool>,
+    pub audio_interp_method: Option<audio::InterpMethod>,
     pub pause_on_launch: Option<bool>,
     pub autosave_interval_ms: Option<f32>,
     pub save_path: Option<SavePathConfig>,
@@ -80,6 +89,8 @@ impl Default for Game {
         Game {
             model: None,
             limit_framerate: None,
+            sync_to_audio: None,
+            audio_interp_method: None,
             pause_on_launch: None,
             autosave_interval_ms: None,
             save_path: Some(SavePathConfig::GlobalSingle),
@@ -199,6 +210,8 @@ impl<T> RuntimeModifiable<T> {
 pub struct LaunchConfig {
     pub model: Model,
     pub limit_framerate: RuntimeModifiable<bool>,
+    pub sync_to_audio: RuntimeModifiable<bool>,
+    pub audio_interp_method: RuntimeModifiable<audio::InterpMethod>,
     pub pause_on_launch: bool,
     pub autosave_interval_ms: RuntimeModifiable<f32>,
     pub cur_save_path: Option<PathBuf>,
@@ -316,6 +329,8 @@ pub fn launch_config(
     }
 
     let limit_framerate = runtime_modifiable!(limit_framerate);
+    let sync_to_audio = runtime_modifiable!(sync_to_audio);
+    let audio_interp_method = runtime_modifiable!(audio_interp_method);
     let pause_on_launch = plain_setting!(pause_on_launch);
     let autosave_interval_ms = runtime_modifiable!(autosave_interval_ms);
 
@@ -328,6 +343,8 @@ pub fn launch_config(
     Ok(LaunchConfig {
         model: model.unwrap(),
         limit_framerate,
+        sync_to_audio,
+        audio_interp_method,
         pause_on_launch,
         autosave_interval_ms,
         cur_save_path,

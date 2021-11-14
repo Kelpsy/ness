@@ -259,9 +259,7 @@ pub fn eor<A: RegSize, I: RegSize, const ADDR: AddrMode>(emu: &mut Emu) {
     set_nz(emu, result);
 }
 
-pub fn adc<A: RegSize, I: RegSize, const ADDR: AddrMode, const DECIMAL: bool>(
-    emu: &mut Emu,
-) {
+pub fn adc<A: RegSize, I: RegSize, const ADDR: AddrMode, const DECIMAL: bool>(emu: &mut Emu) {
     let operand = do_addr_mode_read::<I, A, ADDR>(emu);
     if DECIMAL {
         do_dec_adc(emu, operand);
@@ -270,9 +268,7 @@ pub fn adc<A: RegSize, I: RegSize, const ADDR: AddrMode, const DECIMAL: bool>(
     }
 }
 
-pub fn sbc<A: RegSize, I: RegSize, const ADDR: AddrMode, const DECIMAL: bool>(
-    emu: &mut Emu,
-) {
+pub fn sbc<A: RegSize, I: RegSize, const ADDR: AddrMode, const DECIMAL: bool>(emu: &mut Emu) {
     let operand = !do_addr_mode_read::<I, A, ADDR>(emu);
     if DECIMAL {
         do_dec_sbc(emu, operand);

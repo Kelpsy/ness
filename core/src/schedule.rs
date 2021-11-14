@@ -13,6 +13,7 @@ pub enum Event {
     Ppu(ppu::Event),
     HvIrq,
     Controllers(controllers::Event),
+    UpdateApu,
 }
 
 impl Default for Event {
@@ -23,16 +24,23 @@ impl Default for Event {
 
 pub mod event_slots {
     use crate::utils::def_event_slots;
-    def_event_slots!(super::EventSlotIndex, PPU, PPU_OTHER, HV_IRQ, CONTROLLERS);
+    def_event_slots!(
+        super::EventSlotIndex,
+        PPU,
+        PPU_OTHER,
+        HV_IRQ,
+        CONTROLLERS,
+        APU
+    );
 }
 pub const EVENT_SLOTS: usize = event_slots::LEN;
 
-bounded_int!(pub struct EventSlotIndex(u8), max EVENT_SLOTS as u8);
+bounded_int!(pub struct EventSlotIndex(u8), max (EVENT_SLOTS - 1) as u8);
 
 impl From<usize> for EventSlotIndex {
     #[inline]
     fn from(v: usize) -> Self {
-        assert!(v < event_slots::LEN);
+        assert!(v < EVENT_SLOTS);
         unsafe { Self::new_unchecked(v as u8) }
     }
 }
@@ -98,7 +106,7 @@ impl Schedule {
         self.schedule.pop_pending_event(self.cur_time)
     }
 
-    pub(crate) fn forward_to_target(&mut self) {
-        self.cur_time = self.target_time;
+    pub(crate) fn set_target_to_cur(&mut self) {
+        self.target_time = self.cur_time;
     }
 }

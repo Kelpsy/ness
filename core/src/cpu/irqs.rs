@@ -8,7 +8,6 @@ pub struct Irqs {
     hv_timer_irq_requested: bool,
     processing_irq: bool,
     processing_nmi: bool,
-    processing_exception: bool,
 }
 
 impl Irqs {
@@ -19,7 +18,6 @@ impl Irqs {
             hv_timer_irq_requested: false,
             processing_irq: false,
             processing_nmi: false,
-            processing_exception: false,
         }
     }
 
@@ -30,9 +28,8 @@ impl Irqs {
 
     fn update_irqs(&mut self, schedule: &mut Schedule) {
         self.processing_irq = self.hv_timer_irq_requested && self.irqs_enabled;
-        self.processing_exception = self.processing_irq || self.processing_nmi;
-        if self.processing_exception {
-            schedule.target_time = schedule.cur_time;
+        if self.processing_irq {
+            schedule.set_target_to_cur();
         }
     }
 
@@ -77,18 +74,11 @@ impl Irqs {
     #[inline]
     pub fn request_nmi(&mut self, schedule: &mut Schedule) {
         self.processing_nmi = true;
-        self.processing_exception = true;
-        schedule.target_time = schedule.cur_time;
+        schedule.set_target_to_cur();
         self.waiting_for_exception = false;
     }
 
     pub(super) fn acknowledge_nmi(&mut self) {
         self.processing_nmi = false;
-        self.processing_exception = self.processing_irq;
-    }
-
-    #[inline]
-    pub fn processing_exception(&self) -> bool {
-        self.processing_exception
     }
 }

@@ -1,7 +1,7 @@
 #[cfg(feature = "debug-views")]
 use super::debug_views;
-use super::{config::LaunchConfig, input, triple_buffer, FrameData};
-use ness_core::{cart::Cart, emu::Emu, Model};
+use super::{audio, config::LaunchConfig, input, triple_buffer, FrameData};
+use ness_core::{apu::dsp::DummyBackend as DummyAudioBackend, cart::Cart, emu::Emu, Model};
 use parking_lot::RwLock;
 use std::{
     fs, hint,
@@ -22,6 +22,7 @@ pub struct SharedState {
 pub enum Message {
     UpdateInput(input::Changes),
     UpdateSavePath(Option<PathBuf>),
+    UpdateAudioSync(bool),
     #[cfg(feature = "debug-views")]
     DebugViews(debug_views::Message),
     Stop,
@@ -30,6 +31,7 @@ pub enum Message {
 pub(super) fn main(
     config: LaunchConfig,
     cart: Cart,
+    audio_tx_data: Option<audio::SenderData>,
     mut frame_tx: triple_buffer::Sender<FrameData>,
     message_rx: crossbeam_channel::Receiver<Message>,
     shared_state: Arc<SharedState>,
@@ -38,6 +40,11 @@ pub(super) fn main(
     let mut emu = Emu::new(
         config.model,
         cart,
+        match &audio_tx_data {
+            Some(data) => Box::new(audio::Sender::new(data, config.sync_to_audio.value)),
+            None => Box::new(DummyAudioBackend),
+        },
+        512, // TODO: Make configurable?
         #[cfg(feature = "log")]
         &logger,
     );
@@ -73,6 +80,11 @@ pub(super) fn main(
                 Message::UpdateSavePath(new_path) => {
                     // TODO: Move/remove save file
                     cur_save_path = new_path;
+                }
+                Message::UpdateAudioSync(new_audio_sync) => {
+                    if let Some(data) = &audio_tx_data {
+                        emu.apu.dsp.backend = Box::new(audio::Sender::new(data, new_audio_sync));
+                    }
                 }
                 #[cfg(feature = "debug-views")]
                 Message::DebugViews(message) => {

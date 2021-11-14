@@ -1,5 +1,5 @@
 use crate::{
-    apu::Apu,
+    apu::{dsp, Apu},
     cart::Cart,
     controllers::Controllers,
     cpu::Cpu,
@@ -19,7 +19,13 @@ pub struct Emu {
 }
 
 impl Emu {
-    pub fn new(model: Model, cart: Cart, #[cfg(feature = "log")] logger: &slog::Logger) -> Self {
+    pub fn new(
+        model: Model,
+        cart: Cart,
+        audio_backend: Box<dyn dsp::Backend>,
+        audio_sample_chunk_len: usize,
+        #[cfg(feature = "log")] logger: &slog::Logger,
+    ) -> Self {
         let mut schedule = Schedule::new();
         let mut emu = Emu {
             cpu: Cpu::new(
@@ -28,6 +34,10 @@ impl Emu {
             ),
             wram: Wram::new(),
             apu: Apu::new(
+                audio_backend,
+                audio_sample_chunk_len,
+                model,
+                &mut schedule,
                 #[cfg(feature = "log")]
                 logger,
             ),
@@ -48,7 +58,6 @@ impl Emu {
     pub fn run_frame(&mut self) {
         while !self.ppu.frame_finished {
             Cpu::run_until_next_event(self);
-            #[allow(clippy::never_loop)] // TODO: Remove
             while let Some((event, time)) = self.schedule.pop_pending_event() {
                 match event {
                     Event::Ppu(event) => Ppu::handle_event(self, event, time),
@@ -60,6 +69,7 @@ impl Emu {
                         self.controllers
                             .handle_event(event, time, &mut self.schedule)
                     }
+                    Event::UpdateApu => self.apu.handle_update(time, &mut self.schedule),
                 }
             }
         }
