@@ -6,7 +6,6 @@ use super::{
 impl Dsp {
     pub fn read_reg(&self, mut index: u8) -> u8 {
         index &= 0x7F;
-        slog::info!(self.logger, "R {:02X}", index);
         let i = (index >> 4) as usize;
         match index & 0xF {
             0 => self.channels[i].volume[0] as u8,
@@ -42,7 +41,7 @@ impl Dsp {
             0xF => self.echo_fir_coeffs[i] as u8,
             _ => {
                 #[cfg(feature = "log")]
-                slog::info!(self.logger, "Read from unknown register @ {:#04X}", index);
+                slog::warn!(self.logger, "Read from unknown register @ {:#04X}", index);
                 0
             }
         }
@@ -58,7 +57,6 @@ impl Dsp {
             );
             return;
         }
-        slog::info!(self.logger, "W {:02X} {:02X}", index, value);
         let i = (index >> 4 & 7) as usize;
         match index & 0xF {
             0 => self.channels[i].volume[0] = value as i8,
@@ -104,7 +102,7 @@ impl Dsp {
             0xF => self.echo_fir_coeffs[i] = value as i8,
             _ => {
                 #[cfg(feature = "log")]
-                slog::info!(
+                slog::warn!(
                     self.logger,
                     "Write to unknown register @ {:#04X}: {:#04X}",
                     index,

@@ -63,7 +63,8 @@ impl Ppu {
                     && self.counters.v_counter() != self.counters.v_end() - 1
             }
         {
-            return (self.mode7.params[0] * (self.mode7.params[1] >> 8)) as u32 & 0xFF_FFFF;
+            return (self.mode7.params[0] as i32 * (self.mode7.params[1] >> 8) as i32) as u32
+                & 0xFF_FFFF;
         }
         (if time < next_scanline_start_time {
             match (next_scanline_start_time - time) >> 1 {
