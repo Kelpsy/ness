@@ -121,7 +121,6 @@ pub struct Channel {
     brr_samples: [(i16, Filter); 20],
     brr_block_end: BrrBlockEnd,
     last_sample_index: u8,
-    internal_last_sample: i16,
 
     state: State,
     mode: Mode,
@@ -152,7 +151,6 @@ impl Channel {
             brr_samples: [(0, Filter::new(0)); 20],
             brr_block_end: BrrBlockEnd::Normal,
             last_sample_index: 0,
-            internal_last_sample: 0,
 
             state: State::Stopped,
             mode: Mode::Attack,
@@ -280,6 +278,8 @@ impl Channel {
             channel.mode = Mode::Attack;
             channel.internal_envelope = 0;
             channel.last_sample_index = 19;
+
+            apu.dsp.ended_channels &= !(1 << i.get());
         } else if matches!(channel.state, State::JustStarted(_) | State::Stopped) {
             channel.state = State::Stopped;
         } else {
@@ -298,7 +298,7 @@ impl Channel {
                 channel.internal_envelope = 0;
             }
         }
-        channel.brr_samples.copy_within(4.., 0);
+        channel.brr_samples.copy_within(16.., 0);
         let header = BrrHeader(apu.spc700.memory[channel.cur_addr as usize]);
         channel.cur_addr = channel.cur_addr.wrapping_add(1);
         let shift_amount = header.shift_amount();
@@ -310,9 +310,9 @@ impl Channel {
         };
         let brr_samples = &mut channel.brr_samples[4..];
         for i in 0..8 {
-            let byte = apu.spc700.memory[channel.cur_addr as usize] as i16;
+            let byte = apu.spc700.memory[channel.cur_addr as usize] as i8 as i16;
             channel.cur_addr = channel.cur_addr.wrapping_add(1);
-            for (i, sample) in [(i << 1, byte << 8 >> 12), (i << 1 | 1, byte << 12 >> 12)] {
+            for (i, sample) in [(i << 1, byte >> 4), (i << 1 | 1, byte << 12 >> 12)] {
                 brr_samples[i] = (
                     if shift_amount > 12 {
                         sample >> 3 << 11
@@ -328,6 +328,7 @@ impl Channel {
     pub(super) fn update_stopped(apu: &mut Apu, i: Index) {
         let channel = &mut apu.dsp.channels[i.get() as usize];
         channel.envelope = (channel.internal_envelope >> 4) as u8;
+        channel.last_sample = 0;
     }
 
     pub(super) fn output_sample(apu: &mut Apu, i: Index) -> i16 {
@@ -390,8 +391,6 @@ impl Channel {
                 ((sample as i32 * channel.internal_envelope as i32) >> 11) as i16
             }
         };
-        channel.internal_last_sample = sample;
-        channel.last_sample = (sample >> 7) as i8;
 
         if channel.envelope_counter.needs_update(apu.dsp_timestamp) {
             if channel.state == State::Adsr {
@@ -462,6 +461,7 @@ impl Channel {
             }
         }
 
+        channel.last_sample = (sample >> 7) as i8;
         channel.envelope = (channel.internal_envelope >> 4) as u8;
 
         sample

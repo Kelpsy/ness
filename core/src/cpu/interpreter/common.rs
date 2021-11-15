@@ -93,7 +93,7 @@ pub fn jump_to_exc_vector(emu: &mut Emu, addr: u16) {
             .with_decimal_mode(false)
             .with_irqs_disabled(true),
     );
-    // TODO: Update IRQs enabled
+    emu.cpu.irqs.set_irqs_enabled(false, &mut emu.schedule);
     emu.cpu.regs.pc = read_16_bank0(emu, addr);
     emu.cpu.regs.set_code_bank(0);
 }

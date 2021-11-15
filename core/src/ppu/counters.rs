@@ -71,12 +71,17 @@ impl Counters {
 
     pub(super) fn h_dot(&self, time: Timestamp) -> u16 {
         let h_counter_cycles = (time - self.v_counter_last_change_time()) as u16;
-        if self.h_end_cycles() == SCANLINE_CYCLES - 4 {
+        if h_counter_cycles > self.h_end_cycles() {
+            // Might have run ahead of the scheduler, hope it's just by a few cycles and use the
+            // normal formula
+            (h_counter_cycles - self.h_end_cycles()) >> 2
+        } else if self.h_end_cycles() == SCANLINE_CYCLES - 4 {
             h_counter_cycles >> 2
         } else {
-            h_counter_cycles
+            (h_counter_cycles
                 - (((h_counter_cycles > 323 * 4) as u16) << 1)
-                - (((h_counter_cycles > 327 * 4) as u16) << 1)
+                - (((h_counter_cycles > 327 * 4) as u16) << 1))
+                >> 2
         }
     }
 
@@ -164,29 +169,16 @@ impl Counters {
         result
     }
 
-    fn irq_can_trigger(&self, h_cycles: u16) -> bool {
-        if self.v_counter == self.v_end - 1 {
-            // According to bsnes, the H/V IRQ can't trigger on the last dot of a frame
-            h_cycles < self.h_end_cycles - 4
-        } else {
-            // Otherwise, just check that the requested dot is inside the possible range at all
-            h_cycles < self.h_end_cycles
-        }
-    }
-
     fn h_irq_time(&self, h_timer_value: u16) -> Option<Timestamp> {
-        if h_timer_value == 0 {
-            // TODO: HTIME == 0 is documented to have a delay of 2.5 dots, while every other value
-            // has an offset of 3.5 dots; in bsnes, all values have a delay of 3.5 dots, and only
-            // testing VTIME without HTIME has a 2.5-dot delay. Which of these is correct?
-            Some(self.v_counter_last_change_time + 10)
+        // TODO: HTIME == 0 is documented to have a delay of 2.5 dots, while every other value has
+        // an offset of 3.5 dots; in bsnes, all values have a delay of 3.5 dots, and only testing
+        // VTIME without HTIME has a 2.5-dot delay. Which one is correct? Bsnes's approach is used
+        // for now.
+        let h_timer_cycles = (h_timer_value << 2) + 14;
+        if h_timer_cycles < self.h_irq_end_cycles {
+            Some(self.v_counter_last_change_time + h_timer_cycles as Timestamp)
         } else {
-            let h_timer_cycles = (h_timer_value << 2) + 14;
-            if self.irq_can_trigger(h_timer_cycles) {
-                Some(self.v_counter_last_change_time + h_timer_cycles as Timestamp)
-            } else {
-                None
-            }
+            None
         }
     }
 
@@ -194,10 +186,8 @@ impl Counters {
         let new_irq_time = match self.hv_irq_mode {
             HvIrqMode::None => None,
             HvIrqMode::VMatch => {
-                let irq_trigger_time = time + 10;
-                let h_cycles = irq_trigger_time - self.v_counter_last_change_time;
-                if self.v_counter == self.v_timer_value && self.irq_can_trigger(h_cycles as u16) {
-                    Some(irq_trigger_time)
+                if self.v_counter == self.v_timer_value {
+                    Some(time + 10)
                 } else {
                     None
                 }
@@ -212,7 +202,7 @@ impl Counters {
             HvIrqMode::HMatch => self.h_irq_time(self.h_timer_value),
         };
         if new_irq_time != self.scheduled_hv_irq_time {
-            if self.scheduled_hv_irq_time.is_some() {
+            if self.scheduled_hv_irq_time.take().is_some() {
                 schedule.cancel_event(event_slots::HV_IRQ);
             }
             if let Some(new_irq_time) = new_irq_time {
@@ -222,13 +212,10 @@ impl Counters {
                     self.scheduled_hv_irq_time = Some(new_irq_time);
                     schedule.schedule_event(event_slots::HV_IRQ, new_irq_time);
                 }
-            } else {
-                self.scheduled_hv_irq_time = None;
             }
         }
     }
 
-    #[inline]
     pub(super) fn start_new_line(
         &mut self,
         v_counter: u16,

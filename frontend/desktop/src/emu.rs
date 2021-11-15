@@ -25,6 +25,7 @@ pub enum Message {
     UpdateAudioSync(bool),
     #[cfg(feature = "debug-views")]
     DebugViews(debug_views::Message),
+    SoftReset,
     Stop,
 }
 
@@ -44,7 +45,7 @@ pub(super) fn main(
             Some(data) => Box::new(audio::Sender::new(data, config.sync_to_audio.value)),
             None => Box::new(DummyAudioBackend),
         },
-        4, // TODO: Make configurable?
+        512, // TODO: Make configurable?
         #[cfg(feature = "log")]
         &logger,
     );
@@ -91,19 +92,27 @@ pub(super) fn main(
                         joypad.modify_keys(changes.pressed, changes.released);
                     }
                 }
+
                 Message::UpdateSavePath(new_path) => {
                     // TODO: Move/remove save file
                     cur_save_path = new_path;
                 }
+
                 Message::UpdateAudioSync(new_audio_sync) => {
                     if let Some(data) = &audio_tx_data {
                         emu.apu.dsp.backend = Box::new(audio::Sender::new(data, new_audio_sync));
                     }
                 }
+
                 #[cfg(feature = "debug-views")]
                 Message::DebugViews(message) => {
                     debug_views.handle_message(message);
                 }
+
+                Message::SoftReset => {
+                    emu.soft_reset();
+                }
+
                 Message::Stop => {
                     break 'outer;
                 }

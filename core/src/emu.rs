@@ -52,12 +52,14 @@ impl Emu {
 
     pub fn soft_reset(&mut self) {
         // TODO: Reset other components
+        self.apu.soft_reset();
         Cpu::soft_reset(self);
     }
 
     pub fn run_frame(&mut self) {
         while !self.ppu.frame_finished {
             Cpu::run_until_next_event(self);
+            self.schedule.last_poll_time = self.schedule.cur_time;
             while let Some((event, time)) = self.schedule.pop_pending_event() {
                 match event {
                     Event::Ppu(event) => Ppu::handle_event(self, event, time),

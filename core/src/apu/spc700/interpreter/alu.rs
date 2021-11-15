@@ -95,8 +95,7 @@ pub fn addw(apu: &mut Apu) {
         .set_overflow(!(a ^ b) & (a ^ result) & 1 << 15 != 0);
     let result = result as u16;
     set_nz_16(apu, result);
-    apu.spc700.regs.a = result as u8;
-    apu.spc700.regs.y = (result >> 8) as u8;
+    apu.spc700.regs.set_ya(result);
 }
 
 pub fn subw(apu: &mut Apu) {
@@ -115,8 +114,7 @@ pub fn subw(apu: &mut Apu) {
         .set_overflow((a ^ b) & (a ^ result) & 1 << 15 != 0);
     let result = result as u16;
     set_nz_16(apu, result);
-    apu.spc700.regs.a = result as u8;
-    apu.spc700.regs.y = (result >> 8) as u8;
+    apu.spc700.regs.set_ya(result);
 }
 
 pub fn cmpw(apu: &mut Apu) {

@@ -123,7 +123,7 @@ fn write_a_io<A: AccessType>(emu: &mut Emu, addr: u32, value: u8) {
             return emu.ppu.set_irq_control(
                 ppu::IrqControl(value),
                 &mut emu.cpu.irqs,
-                emu.schedule.cur_time,
+                emu.schedule.last_poll_time,
                 &mut emu.schedule,
             );
         }
@@ -143,28 +143,28 @@ fn write_a_io<A: AccessType>(emu: &mut Emu, addr: u32, value: u8) {
         0x207 => {
             return emu.ppu.counters.set_h_timer_value(
                 (emu.ppu.counters.h_timer_value() & 0xFF00) | value as u16,
-                emu.schedule.cur_time,
+                emu.schedule.last_poll_time,
                 &mut emu.schedule,
             );
         }
         0x208 => {
             return emu.ppu.counters.set_h_timer_value(
                 (emu.ppu.counters.h_timer_value() & 0xFF) | (value as u16) << 8,
-                emu.schedule.cur_time,
+                emu.schedule.last_poll_time,
                 &mut emu.schedule,
             );
         }
         0x209 => {
             return emu.ppu.counters.set_v_timer_value(
                 (emu.ppu.counters.v_timer_value() & 0xFF00) | value as u16,
-                emu.schedule.cur_time,
+                emu.schedule.last_poll_time,
                 &mut emu.schedule,
             );
         }
         0x20A => {
             return emu.ppu.counters.set_v_timer_value(
                 (emu.ppu.counters.v_timer_value() & 0xFF) | (value as u16) << 8,
-                emu.schedule.cur_time,
+                emu.schedule.last_poll_time,
                 &mut emu.schedule,
             );
         }

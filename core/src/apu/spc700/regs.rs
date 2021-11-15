@@ -31,8 +31,8 @@ impl Regs {
             a: 0,
             x: 0,
             y: 0,
-            sp: 0xFF,
-            pc: 0xFFC0,
+            sp: 0,
+            pc: 0,
             psw: Psw(0),
             direct_page_base: 0,
         }

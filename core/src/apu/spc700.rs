@@ -4,6 +4,7 @@ pub mod regs;
 mod timers;
 pub use timers::Timer;
 
+use super::Apu;
 use crate::{
     schedule::Timestamp,
     utils::{bitfield_debug, zeroed_box, Bytes},
@@ -63,6 +64,11 @@ impl Spc700 {
     #[inline]
     pub fn control(&self) -> Control {
         self.control
+    }
+
+    pub(super) fn soft_reset(apu: &mut Apu) {
+        // TODO: Soft-reset I/O registers
+        interpreter::soft_reset(apu);
     }
 
     pub fn set_control(&mut self, value: Control, time: Timestamp) {

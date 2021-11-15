@@ -54,6 +54,7 @@ impl From<EventSlotIndex> for usize {
 
 pub struct Schedule {
     pub(crate) cur_time: Timestamp,
+    pub(crate) last_poll_time: Timestamp,
     pub(crate) target_time: Timestamp,
     pub(crate) schedule: schedule::Schedule<Timestamp, Event, EventSlotIndex, EVENT_SLOTS>,
 }
@@ -62,6 +63,7 @@ impl Schedule {
     pub(super) fn new() -> Self {
         Schedule {
             cur_time: 0,
+            last_poll_time: 0,
             target_time: 0,
             schedule: schedule::Schedule::new(),
         }

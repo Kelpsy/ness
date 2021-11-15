@@ -197,8 +197,8 @@ pub struct Ppu {
 
 impl Ppu {
     pub(crate) fn new(model: Model, schedule: &mut Schedule) -> Self {
-        schedule.set_event(event_slots::PPU, schedule::Event::Ppu(Event::StartHDraw));
-        schedule.schedule_event(event_slots::PPU, DOT_CYCLES as Timestamp);
+        schedule.set_event(event_slots::PPU, schedule::Event::Ppu(Event::EndScanline));
+        schedule.schedule_event(event_slots::PPU, 0);
         let view_height = if model == Model::Pal {
             VIEW_HEIGHT_PAL
         } else {

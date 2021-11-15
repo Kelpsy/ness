@@ -530,6 +530,16 @@ pub fn main() {
                             shared_state.playing.store(state.playing, Ordering::Relaxed);
                         }
 
+                        if imgui::MenuItem::new("Soft reset")
+                            .enabled(state.emu_thread.is_some())
+                            .build(ui)
+                        {
+                            state
+                                .message_tx
+                                .send(emu::Message::SoftReset)
+                                .expect("Couldn't send UI message");
+                        }
+
                         if imgui::MenuItem::new("Stop")
                             .enabled(state.emu_thread.is_some())
                             .build(ui)

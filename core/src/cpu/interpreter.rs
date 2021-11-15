@@ -27,7 +27,7 @@ pub fn soft_reset(emu: &mut Emu) {
     );
     emu.cpu.regs.set_emulation_mode::<true>(true);
     emu.cpu.regs.direct_page_offset = 0;
-    emu.cpu.regs.sp = 0x100 | (emu.cpu.regs.sp & 0xFF);
+    emu.cpu.regs.sp = 0x1FC;
     emu.cpu.regs.set_data_bank(0);
     jump_to_exc_vector(emu, 0xFFFC);
 }

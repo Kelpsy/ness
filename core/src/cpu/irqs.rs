@@ -2,6 +2,7 @@
 
 use crate::schedule::Schedule;
 
+#[derive(Debug)]
 pub struct Irqs {
     irqs_enabled: bool,
     waiting_for_exception: bool,

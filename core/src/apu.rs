@@ -55,6 +55,11 @@ impl Apu {
         );
     }
 
+    pub(crate) fn soft_reset(&mut self) {
+        // TODO: Soft-reset DSP
+        Spc700::soft_reset(self);
+    }
+
     pub(crate) fn run(&mut self, end_main_timestamp: Timestamp) {
         // TODO: Something less hacky?
         let end_timestamp = if self.model == Model::Pal {

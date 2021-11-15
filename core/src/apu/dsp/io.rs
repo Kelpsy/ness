@@ -36,7 +36,7 @@ impl Dsp {
                 0x4 => self.echo_channel_mask,
                 0x5 => self.sample_table_base,
                 0x6 => self.echo_buffer_base,
-                _ => self.echo_buffer_len,
+                _ => self.echo_buffer_delay,
             },
             0xF => self.echo_fir_coeffs[i] as u8,
             _ => {
@@ -97,7 +97,7 @@ impl Dsp {
                 0x4 => self.echo_channel_mask = value,
                 0x5 => self.sample_table_base = value,
                 0x6 => self.echo_buffer_base = value,
-                _ => self.echo_buffer_len = value,
+                _ => self.echo_buffer_delay = value,
             },
             0xF => self.echo_fir_coeffs[i] = value as i8,
             _ => {
