@@ -268,29 +268,6 @@ pub fn launch_config(
 
     let mut errors = Vec::new();
 
-    // 00h -  International (eg. SGB)  (any)
-    // 00h J  Japan                    (NTSC)
-    // 01h E  USA and Canada           (NTSC)
-    // 02h P  Europe, Oceania, Asia    (PAL)
-    // 03h W  Sweden/Scandinavia       (PAL)
-    // 04h -  Finland                  (PAL)
-    // 05h -  Denmark                  (PAL)
-    // 06h F  France                   (SECAM, PAL-like 50Hz)
-    // 07h H  Holland                  (PAL)
-    // 08h S  Spain                    (PAL)
-    // 09h D  Germany, Austria, Switz  (PAL)
-    // 0Ah I  Italy                    (PAL)
-    // 0Bh C  China, Hong Kong         (PAL)
-    // 0Ch -  Indonesia                (PAL)
-    // 0Dh K  South Korea              (NTSC) (North Korea would be PAL)
-    // 0Eh A  Common (?)               (?)
-    // 0Fh N  Canada                   (NTSC)
-    // 10h B  Brazil                   (PAL-M, NTSC-like 60Hz)
-    // 11h U  Australia                (PAL)
-    // 12h X  Other variation          (?)
-    // 13h Y  Other variation          (?)
-    // 14h Z  Other variation          (?)
-
     let model = match plain_setting!(model) {
         ModelConfig::Auto => {
             // TODO: Detect whether the game's region is PAL or NTSC (can be inferred from the

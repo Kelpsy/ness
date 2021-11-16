@@ -291,6 +291,16 @@ impl Builder {
                     window.gfx.device_state.invalidate_swapchain();
                 }
                 Event::MainEventsCleared => {
+                    // TODO: https://github.com/rust-windowing/winit/issues/2022 and
+                    // https://github.com/gfx-rs/wgpu/issues/1783
+                    #[cfg(target_os = "macos")]
+                    if unsafe { (window.window.ns_window() as id).occlusionState() }
+                        .contains(NSWindowOcclusionState::NSWindowOcclusionStateVisible)
+                    {
+                        *control_flow = WinitControlFlow::Wait;
+                        return;
+                    }
+
                     let now = Instant::now();
                     let io = self.imgui.io_mut();
                     io.update_delta_time(now - window.last_frame);
@@ -310,23 +320,14 @@ impl Builder {
                         .prepare_render(&ui, &window.window);
                     let imgui_draw_data = ui.render();
 
-                    // TODO: https://github.com/rust-windowing/winit/issues/2022
-                    #[cfg(target_os = "macos")]
-                    let window_visible =
-                        unsafe { (window.window.ns_window() as id).occlusionState() }
-                            .contains(NSWindowOcclusionState::NSWindowOcclusionStateVisible);
-                    #[cfg(not(target_os = "macos"))]
-                    let window_visible = true;
-                    if window.is_hidden || window_visible {
-                        window
-                            .gfx
-                            .redraw(imgui_draw_data, window.window.inner_size());
-                        window.gfx.device_state.device.poll(wgpu::Maintain::Poll);
+                    window
+                        .gfx
+                        .redraw(imgui_draw_data, window.window.inner_size());
+                    window.gfx.device_state.device.poll(wgpu::Maintain::Poll);
 
-                        if window.is_hidden {
-                            window.is_hidden = false;
-                            window.window.set_visible(true);
-                        }
+                    if window.is_hidden {
+                        window.is_hidden = false;
+                        window.window.set_visible(true);
                     }
                 }
                 Event::LoopDestroyed => {
