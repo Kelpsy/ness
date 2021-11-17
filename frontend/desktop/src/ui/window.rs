@@ -291,13 +291,14 @@ impl Builder {
                     window.gfx.device_state.invalidate_swapchain();
                 }
                 Event::MainEventsCleared => {
-                    // TODO: https://github.com/rust-windowing/winit/issues/2022 and
-                    // https://github.com/gfx-rs/wgpu/issues/1783
+                    // TODO: https://github.com/rust-windowing/winit/issues/2022
                     #[cfg(target_os = "macos")]
-                    if unsafe { (window.window.ns_window() as id).occlusionState() }
-                        .contains(NSWindowOcclusionState::NSWindowOcclusionStateVisible)
-                    {
-                        *control_flow = WinitControlFlow::Wait;
+                    let window_visible =
+                        unsafe { (window.window.ns_window() as id).occlusionState() }
+                            .contains(NSWindowOcclusionState::NSWindowOcclusionStateVisible);
+                    #[cfg(not(target_os = "macos"))]
+                    let window_visible = true;
+                    if !window_visible && !window.is_hidden {
                         return;
                     }
 
@@ -318,11 +319,7 @@ impl Builder {
                     window
                         .imgui_winit_platform
                         .prepare_render(&ui, &window.window);
-                    let imgui_draw_data = ui.render();
-
-                    window
-                        .gfx
-                        .redraw(imgui_draw_data, window.window.inner_size());
+                    window.gfx.redraw(ui.render(), window.window.inner_size());
                     window.gfx.device_state.device.poll(wgpu::Maintain::Poll);
 
                     if window.is_hidden {
