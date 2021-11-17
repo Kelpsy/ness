@@ -61,12 +61,6 @@ impl Apu {
     }
 
     pub(crate) fn run(&mut self, end_main_timestamp: Timestamp) {
-        // TODO: Something less hacky?
-        let end_timestamp = if self.model == Model::Pal {
-            end_main_timestamp as u128 * 1024000 / 17734475
-        } else {
-            end_main_timestamp as u128 * 102400 / 2147727
-        } as Timestamp;
-        spc700::interpreter::run(self, end_timestamp);
+        Spc700::run(self, end_main_timestamp);
     }
 }

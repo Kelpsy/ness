@@ -1,13 +1,16 @@
 pub mod bus;
-pub(super) mod interpreter;
 pub mod regs;
 mod timers;
 pub use timers::Timer;
+
+pub mod disasm;
+mod interpreter;
 
 use super::Apu;
 use crate::{
     schedule::Timestamp,
     utils::{bitfield_debug, zeroed_box, Bytes},
+    Model,
 };
 use regs::Regs;
 
@@ -66,11 +69,6 @@ impl Spc700 {
         self.control
     }
 
-    pub(super) fn soft_reset(apu: &mut Apu) {
-        // TODO: Soft-reset I/O registers
-        interpreter::soft_reset(apu);
-    }
-
     pub fn set_control(&mut self, value: Control, time: Timestamp) {
         self.control = value;
         if value.reset_ports_01() {
@@ -83,5 +81,20 @@ impl Spc700 {
         for (i, timer) in self.timers.iter_mut().enumerate() {
             timer.set_enabled(timers_enable_mask & 1 << i != 0, time);
         }
+    }
+
+    pub(super) fn soft_reset(apu: &mut Apu) {
+        // TODO: Soft-reset I/O registers
+        interpreter::soft_reset(apu);
+    }
+
+    pub(super) fn run(apu: &mut Apu, end_main_timestamp: Timestamp) {
+        // TODO: Something less hacky?
+        let end_timestamp = if apu.model == Model::Pal {
+            end_main_timestamp as u128 * 1024000 / 17734475
+        } else {
+            end_main_timestamp as u128 * 102400 / 2147727
+        } as Timestamp;
+        interpreter::run(apu, end_timestamp);
     }
 }

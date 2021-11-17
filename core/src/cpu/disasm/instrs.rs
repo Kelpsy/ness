@@ -8,8 +8,8 @@ pub(super) fn mem_op<A: RegSize, const OP: &'static str, const ADDR: AddrMode>(c
     ctx.handle_mem_op::<A, ADDR>();
 }
 
-pub(super) fn b_cond<const COND: &'static str>(ctx: &mut Context) {
-    let offset = ctx.consume_imm::<u8>() as i8;
+pub(super) fn branch<const COND: &'static str>(ctx: &mut Context) {
+    let offset = ctx.consume_imm::<u8>() as i8 as i16;
     ctx.next_instr.opcode = format!(
         "B{} ${}{:02X}",
         COND,
@@ -23,7 +23,7 @@ pub(super) fn b_cond<const COND: &'static str>(ctx: &mut Context) {
 }
 
 pub(super) fn brl(ctx: &mut Context) {
-    let offset = ctx.consume_imm::<u16>() as i16;
+    let offset = ctx.consume_imm::<u16>() as i16 as i32;
     ctx.next_instr.opcode = format!(
         "BRL ${}{:04X}",
         if offset < 0 { "-" } else { "" },
@@ -87,7 +87,7 @@ pub(super) fn jmp<const SUBROUTINE: bool, const ADDR: JumpAddr>(ctx: &mut Contex
 }
 
 pub(super) fn per(ctx: &mut Context) {
-    let offset = ctx.consume_imm::<u16>() as i16;
+    let offset = ctx.consume_imm::<u16>() as i16 as i32;
     ctx.next_instr.opcode = format!(
         "PER {}{:04X}",
         if offset < 0 { "-" } else { "" },

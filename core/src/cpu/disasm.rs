@@ -33,7 +33,7 @@ struct Context<'a> {
 
 impl<'a> Context<'a> {
     fn from_emu_state_and_addr(emu: &'a mut Emu, addr: u32) -> Self {
-        Context {
+        let mut ctx = Context {
             pc: addr as u16,
             direct_page_offset: Some(emu.cpu.regs.direct_page_offset),
             a_is_8_bit: emu.cpu.regs.psw.a_is_8_bit(),
@@ -50,7 +50,9 @@ impl<'a> Context<'a> {
                 followed_by_bank_boundary_crossing: false,
             },
             emu,
-        }
+        };
+        ctx.update_psw_lut_base();
+        ctx
     }
 
     fn update_psw_lut_base(&mut self) {
@@ -93,9 +95,7 @@ impl<'a> Context<'a> {
 }
 
 pub fn disassemble_range_with_emu_state(emu: &mut Emu, addrs: Range<u32>, result: &mut Vec<Instr>) {
-    let mut ctx = Context::from_emu_state_and_addr(emu, addrs.start);
-    ctx.update_psw_lut_base();
-    ctx.disassemble_while(result, |ctx, _| {
+    Context::from_emu_state_and_addr(emu, addrs.start).disassemble_while(result, |ctx, _| {
         ctx.pc as u32 | ctx.code_bank_base < addrs.end
     });
 }
@@ -106,13 +106,10 @@ pub fn disassemble_count_with_emu_state(
     count: usize,
     result: &mut Vec<Instr>,
 ) {
-    let mut ctx = Context::from_emu_state_and_addr(emu, start_addr);
-    ctx.update_psw_lut_base();
-    ctx.disassemble_while(result, |_, result| result.len() < count);
+    Context::from_emu_state_and_addr(emu, start_addr)
+        .disassemble_while(result, |_, result| result.len() < count);
 }
 
 pub fn disassemble_single_with_emu_state(emu: &mut Emu, addr: u32) -> Instr {
-    let mut ctx = Context::from_emu_state_and_addr(emu, addr);
-    ctx.update_psw_lut_base();
-    ctx.disassemble_single()
+    Context::from_emu_state_and_addr(emu, addr).disassemble_single()
 }

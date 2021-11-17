@@ -20,17 +20,6 @@ pub fn b_cond<const BIT: u8, const SET: bool>(apu: &mut Apu) {
     do_cond_branch(apu, |psw| (psw.0 & 1 << BIT != 0) == SET);
 }
 
-pub fn jmp_absolute(apu: &mut Apu) {
-    let new_pc = consume_imm_16(apu);
-    apu.spc700.regs.pc = new_pc;
-}
-
-pub fn jmp_abs_x_indirect(apu: &mut Apu) {
-    let indirect = consume_imm_16(apu).wrapping_add(apu.spc700.regs.x as u16);
-    add_io_cycles(apu, 1);
-    apu.spc700.regs.pc = read_16(apu, indirect);
-}
-
 pub fn cbne_direct(apu: &mut Apu) {
     let addr = consume_imm_8(apu) as u16 | apu.spc700.regs.direct_page_base();
     let value = read_8(apu, addr);
@@ -78,26 +67,26 @@ pub fn dbnz_y(apu: &mut Apu) {
     }
 }
 
-pub fn bbs<const BIT: u8>(apu: &mut Apu) {
+pub fn branch_bit<const SET: bool, const BIT: u8>(apu: &mut Apu) {
     let addr = consume_imm_8(apu) as u16 | apu.spc700.regs.direct_page_base();
     let value = read_8(apu, addr);
     add_io_cycles(apu, 1);
     let offset = consume_imm_8(apu) as i8;
-    if value & 1 << BIT != 0 {
+    if (value & 1 << BIT != 0) == SET {
         add_io_cycles(apu, 2);
         apu.spc700.regs.pc = apu.spc700.regs.pc.wrapping_add(offset as u16);
     }
 }
 
-pub fn bbc<const BIT: u8>(apu: &mut Apu) {
-    let addr = consume_imm_8(apu) as u16 | apu.spc700.regs.direct_page_base();
-    let value = read_8(apu, addr);
+pub fn jmp_absolute(apu: &mut Apu) {
+    let new_pc = consume_imm_16(apu);
+    apu.spc700.regs.pc = new_pc;
+}
+
+pub fn jmp_abs_x_indirect(apu: &mut Apu) {
+    let indirect = consume_imm_16(apu).wrapping_add(apu.spc700.regs.x as u16);
     add_io_cycles(apu, 1);
-    let offset = consume_imm_8(apu) as i8;
-    if value & 1 << BIT == 0 {
-        add_io_cycles(apu, 2);
-        apu.spc700.regs.pc = apu.spc700.regs.pc.wrapping_add(offset as u16);
-    }
+    apu.spc700.regs.pc = read_16(apu, indirect);
 }
 
 pub fn call(apu: &mut Apu) {

@@ -323,7 +323,7 @@ fn output_main_cpu_disasm_instr_table() {
                 0x0A => "raw::<\"ASL A\">".to_string(),
                 0x0B => "raw::<\"PHD\">".to_string(),
                 0x0C => format!("mem_op::<{}, \"TSB\", {{AddrMode::Absolute}}>", acc_ty),
-                0x10 => "b_cond::<\"PL\">".to_string(),
+                0x10 => "branch::<\"PL\">".to_string(),
                 0x14 => format!("mem_op::<{}, \"TRB\", {{AddrMode::Direct}}>", acc_ty),
                 0x18 => "raw::<\"CLC\">".to_string(),
                 0x1A => "raw::<\"INC A\">".to_string(),
@@ -334,7 +334,7 @@ fn output_main_cpu_disasm_instr_table() {
                 0x28 => "raw::<\"PLP\">".to_string(),
                 0x2A => "raw::<\"ROL A\">".to_string(),
                 0x2B => "raw::<\"PLD\">".to_string(),
-                0x30 => "b_cond::<\"MI\">".to_string(),
+                0x30 => "branch::<\"MI\">".to_string(),
                 0x38 => "raw::<\"SEC\">".to_string(),
                 0x3A => "raw::<\"DEC A\">".to_string(),
                 0x3B => "raw::<\"TSC\">".to_string(),
@@ -345,7 +345,7 @@ fn output_main_cpu_disasm_instr_table() {
                 0x4A => "raw::<\"LSR A\">".to_string(),
                 0x4B => "raw::<\"PHK\">".to_string(),
                 0x4C => "jmp::<false, {JumpAddr::Absolute}>".to_string(),
-                0x50 => "b_cond::<\"VC\">".to_string(),
+                0x50 => "branch::<\"VC\">".to_string(),
                 0x54 => "move_block::<true>".to_string(),
                 0x58 => "raw::<\"CLI\">".to_string(),
                 0x5A => "raw::<\"PHY\">".to_string(),
@@ -358,18 +358,18 @@ fn output_main_cpu_disasm_instr_table() {
                 0x6A => "raw::<\"ROR A\">".to_string(),
                 0x6B => "raw::<\"RTL\">".to_string(),
                 0x6C => "jmp::<false, {JumpAddr::AbsoluteIndirect}>".to_string(),
-                0x70 => "b_cond::<\"VS\">".to_string(),
+                0x70 => "branch::<\"VS\">".to_string(),
                 0x74 => format!("mem_op::<{}, \"STZ\", {{AddrMode::DirectX}}>", acc_ty),
                 0x78 => "raw::<\"SEI\">".to_string(),
                 0x7A => "raw::<\"PLY\">".to_string(),
                 0x7B => "raw::<\"TDC\">".to_string(),
                 0x7C => "jmp::<false, {JumpAddr::AbsoluteXIndirect}>".to_string(),
-                0x80 => "b_cond::<\"RA\">".to_string(),
+                0x80 => "branch::<\"RA\">".to_string(),
                 0x82 => "brl".to_string(),
                 0x88 => "raw::<\"DEY\">".to_string(),
                 0x8A => "raw::<\"TXA\">".to_string(),
                 0x8B => "raw::<\"PHB\">".to_string(),
-                0x90 => "b_cond::<\"CC\">".to_string(),
+                0x90 => "branch::<\"CC\">".to_string(),
                 0x98 => "raw::<\"TYA\">".to_string(),
                 0x9A => "raw::<\"TXS\">".to_string(),
                 0x9B => "raw::<\"TXY\">".to_string(),
@@ -380,7 +380,7 @@ fn output_main_cpu_disasm_instr_table() {
                 0xA8 => "raw::<\"TAY\">".to_string(),
                 0xAA => "raw::<\"TAX\">".to_string(),
                 0xAB => "raw::<\"PLB\">".to_string(),
-                0xB0 => "b_cond::<\"CS\">".to_string(),
+                0xB0 => "branch::<\"CS\">".to_string(),
                 0xB8 => "raw::<\"CLV\">".to_string(),
                 0xBA => "raw::<\"TSX\">".to_string(),
                 0xBB => "raw::<\"TYX\">".to_string(),
@@ -391,7 +391,7 @@ fn output_main_cpu_disasm_instr_table() {
                 0xCA => "raw::<\"DEX\">".to_string(),
                 0xCB => "raw::<\"WAI\">".to_string(),
                 0xCC => format!("mem_op::<{}, \"CPY\", {{AddrMode::Absolute}}>", idx_ty),
-                0xD0 => "b_cond::<\"NE\">".to_string(),
+                0xD0 => "branch::<\"NE\">".to_string(),
                 0xD4 => "mem_op::<u8, \"PEI\", {AddrMode::DirectIndirect}>".to_string(),
                 0xD8 => "raw::<\"CLD\">".to_string(),
                 0xDA => "raw::<\"PHX\">".to_string(),
@@ -404,7 +404,7 @@ fn output_main_cpu_disasm_instr_table() {
                 0xEA => "raw::<\"NOP\">".to_string(),
                 0xEB => "raw::<\"XBA\">".to_string(),
                 0xEC => format!("mem_op::<{}, \"CPX\", {{AddrMode::Absolute}}>", idx_ty),
-                0xF0 => "b_cond::<\"EQ\">".to_string(),
+                0xF0 => "branch::<\"EQ\">".to_string(),
                 0xF4 => "mem_op::<u8, \"PEA\", {AddrMode::Absolute}>".to_string(),
                 0xF8 => "raw::<\"SED\">".to_string(),
                 0xFA => "raw::<\"PLX\">".to_string(),
@@ -423,17 +423,17 @@ fn output_spc700_instr_table() {
         0 => match instr >> 4 {
             0x0 => "nop",
             0x1 => "b_cond::<7, false>",
-            0x2 => "clrp",
+            0x2 => "set_direct_page::<false>",
             0x3 => "b_cond::<7, true>",
-            0x4 => "setp",
+            0x4 => "set_direct_page::<true>",
             0x5 => "b_cond::<6, false>",
-            0x6 => "clrc",
+            0x6 => "set_carry::<false>",
             0x7 => "b_cond::<6, true>",
-            0x8 => "setc",
+            0x8 => "set_carry::<true>",
             0x9 => "b_cond::<0, false>",
-            0xA => "ei",
+            0xA => "set_irqs_enabled::<true>",
             0xB => "b_cond::<0, true>",
-            0xC => "di",
+            0xC => "set_irqs_enabled::<false>",
             0xD => "b_cond::<1, false>",
             0xE => "clrv",
             0xF => "b_cond::<1, true>",
@@ -441,16 +441,8 @@ fn output_spc700_instr_table() {
         }
         .to_string(),
         1 => format!("tcall::<{}>", instr >> 4),
-        2 => format!(
-            "{}::<{}>",
-            if instr & 0x10 == 0 { "set1" } else { "clr1" },
-            instr >> 5,
-        ),
-        3 => format!(
-            "{}::<{}>",
-            if instr & 0x10 == 0 { "bbs" } else { "bbc" },
-            instr >> 5,
-        ),
+        2 => format!("modify_bit::<{}, {}>", instr & 0x10 == 0, instr >> 5,),
+        3 => format!("branch_bit::<{}, {}>", instr & 0x10 == 0, instr >> 5,),
         4..=9 => {
             let (first_op, second_op) = match instr & 0x1F {
                 0x04 => ("Reg(Reg::A)", "Direct"),
@@ -578,11 +570,11 @@ fn output_spc700_instr_table() {
             0xDD => "mov_reg_op::<{Reg::A}, {MemOrReg::Reg(Reg::Y)}>",
             0xED => "notc",
             0xFD => "mov_reg_op::<{Reg::Y}, {MemOrReg::Reg(Reg::A)}>",
-            0x0E => "tset1",
+            0x0E => "test_modify_bit::<true>",
             0x1E => "cmp::<{MemOrReg::Reg(Reg::X)}, {AddrMode::Absolute}>",
             0x2E => "cbne_direct",
             0x3E => "cmp::<{MemOrReg::Reg(Reg::X)}, {AddrMode::Direct}>",
-            0x4E => "tclr1",
+            0x4E => "test_modify_bit::<false>",
             0x5E => "cmp::<{MemOrReg::Reg(Reg::Y)}, {AddrMode::Absolute}>",
             0x6E => "dbnz_direct",
             0x7E => "cmp::<{MemOrReg::Reg(Reg::Y)}, {AddrMode::Direct}>",
@@ -618,9 +610,211 @@ fn output_spc700_instr_table() {
         .expect("Couldn't output SPC700 instruction table");
 }
 
+fn output_spc700_disasm_instr_table() {
+    let instrs = (0..0x100).map(|instr| match instr & 0xF {
+        0 => match instr >> 4 {
+            0x0 => "raw::<\"NOP\">",
+            0x1 => "branch::<\"PL\">",
+            0x2 => "set_direct_page::<false>",
+            0x3 => "branch::<\"MI\">",
+            0x4 => "set_direct_page::<true>",
+            0x5 => "branch::<\"VC\">",
+            0x6 => "raw::<\"CLRC\">",
+            0x7 => "branch::<\"VS\">",
+            0x8 => "raw::<\"SETC\">",
+            0x9 => "branch::<\"CC\">",
+            0xA => "raw::<\"EI\">",
+            0xB => "branch::<\"CS\">",
+            0xC => "raw::<\"DI\">",
+            0xD => "branch::<\"NE\">",
+            0xE => "raw::<\"CLRV\">",
+            0xF => "branch::<\"EQ\">",
+            _ => unreachable!(),
+        }
+        .to_string(),
+        1 => format!("tcall::<{}>", instr >> 4),
+        2 => format!(
+            "modify_bit::<\"{}\", {}>",
+            if instr & 0x10 == 0 { "SET1" } else { "CLR1" },
+            instr >> 5,
+        ),
+        3 => format!("branch_bit::<{}, {}>", instr & 0x10 == 0, instr >> 5,),
+        4..=9 => {
+            let (opcode, a_first) = match instr >> 5 {
+                0 => ("OR", true),
+                1 => ("AND", true),
+                2 => ("EOR", true),
+                3 => ("CMP", true),
+                4 => ("ADC", true),
+                5 => ("SBC", true),
+                6 => {
+                    if instr & 0xE == 0x8 {
+                        return match instr & 0x11 {
+                            0 => "op_reg_mem::<\"CMP\", \"X\", {AddrMode::Immediate}>",
+                            1 => "op_mem_reg::<\"MOV\", {AddrMode::Absolute}, \"X\">",
+                            0x10 => "op_mem_reg::<\"MOV\", {AddrMode::Direct}, \"X\">",
+                            _ => "op_mem_reg::<\"MOV\", {AddrMode::DirectY}, \"X\">",
+                        }
+                        .to_string();
+                    }
+                    ("MOV", false)
+                }
+                7 => {
+                    if instr & 0xE == 0x8 && instr != 0xE8 {
+                        return match instr & 0x11 {
+                            1 => "op_reg_mem::<\"MOV\", \"X\", {AddrMode::Absolute}>",
+                            0x10 => "op_reg_mem::<\"MOV\", \"X\", {AddrMode::Direct}>",
+                            _ => "op_reg_mem::<\"MOV\", \"X\", {AddrMode::DirectY}>",
+                        }
+                        .to_string();
+                    }
+                    ("MOV", true)
+                }
+                _ => unreachable!(),
+            };
+            let addr_mode = match instr & 0x1F {
+                0x04 => "Direct",
+                0x05 => "Absolute",
+                0x06 => "X",
+                0x07 => "DirectXIndirect",
+                0x08 => "Immediate",
+                0x09 => return format!("op_direct::<\"{}\">", opcode),
+                0x14 => "DirectX",
+                0x15 => "AbsoluteX",
+                0x16 => "AbsoluteY",
+                0x17 => "DirectIndirectY",
+                0x18 => return format!("op_direct_imm::<\"{}\">", opcode),
+                0x19 => return format!("raw::<\"{} (X), (Y)\">", opcode),
+                _ => unreachable!(),
+            };
+            if a_first {
+                format!(
+                    "op_reg_mem::<\"{}\", \"A\", {{AddrMode::{}}}>",
+                    opcode, addr_mode,
+                )
+            } else {
+                format!(
+                    "op_mem_reg::<\"{}\", {{AddrMode::{}}}, \"A\">",
+                    opcode, addr_mode,
+                )
+            }
+        }
+        0xA => match instr >> 4 {
+            0x0 => "op_carry_mem::<\"OR1\", false>",
+            0x1 => "modify_direct_word::<\"DEC\">",
+            0x2 => "op_carry_mem::<\"OR1\", true>",
+            0x3 => "modify_direct_word::<\"INC\">",
+            0x4 => "op_carry_mem::<\"AND1\", false>",
+            0x5 => "ya_mem_op::<\"CMP\">",
+            0x6 => "op_carry_mem::<\"AND1\", true>",
+            0x7 => "ya_mem_op::<\"ADD\">",
+            0x8 => "op_carry_mem::<\"EOR1\", false>",
+            0x9 => "ya_mem_op::<\"SUB\">",
+            0xA => "op_carry_mem::<\"MOV1\", false>",
+            0xB => "ya_mem_op::<\"MOV\">",
+            0xC => "mov1_mem_carry",
+            0xD => "movw_mem_ya",
+            0xE => "not1",
+            0xF => "op_direct::<\"MOV\">",
+            _ => unreachable!(),
+        }
+        .to_string(),
+        0xB..=0xC => {
+            let addr_mode = match instr & 0x1F {
+                0xB => "Direct",
+                0xC => "Absolute",
+                0x1B => "DirectX",
+                0x1C => "",
+                _ => unreachable!(),
+            };
+            let opcode = match instr >> 5 {
+                0 => "ASL",
+                1 => "ROL",
+                2 => "LSR",
+                3 => "ROR",
+                4 => "DEC",
+                5 => "INC",
+                6 => {
+                    if instr == 0xDC {
+                        return "raw::<\"DEC Y\">".to_string();
+                    }
+                    return format!("op_mem_reg::<\"MOV\", {{AddrMode::{}}}, \"Y\">", addr_mode);
+                }
+                7 => {
+                    if instr == 0xFC {
+                        return "raw::<\"INC Y\">".to_string();
+                    }
+                    return format!("op_reg_mem::<\"MOV\", \"Y\", {{AddrMode::{}}}>", addr_mode);
+                }
+                _ => unreachable!(),
+            };
+            if instr & 0x1F == 0x1C {
+                format!("raw::<\"{} A\">", opcode)
+            } else {
+                format!("op_mem::<\"{}\", {{AddrMode::{}}}>", opcode, addr_mode,)
+            }
+        }
+        _ => match instr {
+            0x0D => "raw::<\"PUSH PSW\">",
+            0x1D => "raw::<\"DEC X\">",
+            0x2D => "raw::<\"PUSH A\">",
+            0x3D => "raw::<\"INC X\">",
+            0x4D => "raw::<\"PUSH X\">",
+            0x5D => "raw::<\"MOV X, A\">",
+            0x6D => "raw::<\"PUSH Y\">",
+            0x7D => "raw::<\"MOV A, X\">",
+            0x8D => "op_reg_mem::<\"MOV\", \"Y\", {AddrMode::Immediate}>",
+            0x9D => "raw::<\"MOV X, SP\">",
+            0xAD => "op_reg_mem::<\"CMP\", \"Y\", {AddrMode::Immediate}>",
+            0xBD => "raw::<\"MOV SP, X\">",
+            0xCD => "op_reg_mem::<\"MOV\", \"X\", {AddrMode::Immediate}>",
+            0xDD => "raw::<\"MOV A, Y\">",
+            0xED => "raw::<\"NOTC\">",
+            0xFD => "raw::<\"MOV Y, A\">",
+            0x0E => "test_modify_bit::<true>",
+            0x1E => "op_reg_mem::<\"CMP\", \"X\", {AddrMode::Absolute}>",
+            0x2E => "cbne::<{AddrMode::Direct}>",
+            0x3E => "op_reg_mem::<\"CMP\", \"X\", {AddrMode::Direct}>",
+            0x4E => "test_modify_bit::<false>",
+            0x5E => "op_reg_mem::<\"CMP\", \"Y\", {AddrMode::Absolute}>",
+            0x6E => "dbnz_direct",
+            0x7E => "op_reg_mem::<\"CMP\", \"Y\", {AddrMode::Direct}>",
+            0x8E => "raw::<\"POP PSW\">",
+            0x9E => "raw::<\"DIV YA, X\">",
+            0xAE => "raw::<\"POP A\">",
+            0xBE => "raw::<\"DAS\">",
+            0xCE => "raw::<\"POP X\">",
+            0xDE => "cbne::<{AddrMode::DirectX}>",
+            0xEE => "raw::<\"POP Y\">",
+            0xFE => "dbnz_y",
+            0x0F => "raw::<\"BRK\">",
+            0x1F => "jmp_abs_x_indirect",
+            0x2F => "branch::<\"RA\">",
+            0x3F => "call",
+            0x4F => "pcall",
+            0x5F => "jmp_absolute",
+            0x6F => "raw::<\"RET\">",
+            0x7F => "raw::<\"RETI\">",
+            0x8F => "op_direct_imm::<\"MOV\">",
+            0x9F => "raw::<\"XCN A\">",
+            0xAF => "raw::<\"MOV (X)+, A\">",
+            0xBF => "raw::<\"MOV A, (X)+\">",
+            0xCF => "raw::<\"MUL YA\">",
+            0xDF => "raw::<\"DAA\">",
+            0xEF => "raw::<\"SLEEP\">",
+            0xFF => "raw::<\"STOP\">",
+            _ => unreachable!(),
+        }
+        .to_string(),
+    });
+    output_instr_table("instr_table_spc700_disasm.rs", instrs)
+        .expect("Couldn't output SPC700 disassembly instruction table");
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     output_main_cpu_instr_table();
     output_main_cpu_disasm_instr_table();
     output_spc700_instr_table();
+    output_spc700_disasm_instr_table();
 }
