@@ -1,6 +1,5 @@
 use super::{Ppu, VIEW_WIDTH};
 use crate::utils::bitfield_debug;
-use core::mem;
 
 bitfield_debug! {
     #[derive(Clone, Copy, PartialEq, Eq)]
@@ -86,12 +85,6 @@ impl LayerWin12Mask {
         }
     }
 }
-
-pub(super) const WIN_BUFFER_ENTRY_SHIFT: usize =
-    3 + mem::size_of::<usize>().trailing_zeros() as usize;
-pub(super) const WIN_BUFFER_BIT_MASK: usize = (1 << WIN_BUFFER_ENTRY_SHIFT) - 1;
-pub(super) const WIN_BUFFER_LEN: usize = VIEW_WIDTH >> WIN_BUFFER_ENTRY_SHIFT;
-pub(super) type WindowMask = [usize; WIN_BUFFER_LEN];
 
 impl Ppu {
     #[inline]
@@ -231,7 +224,7 @@ impl Ppu {
                 let main_screen_black_mode = self.color_math_control_a.force_main_screen_black();
                 let disabled = match color_math_mode {
                     0 => {
-                        self.layer_window_masks[5][0].fill(usize::MAX);
+                        self.layer_window_masks[5][0].0.fill(true);
                         true
                     }
                     3 => true,
@@ -255,8 +248,8 @@ impl Ppu {
                 || (win12_areas[0] == LayerWin12Area::Disabled
                     && win12_areas[1] == LayerWin12Area::Disabled)
             {
-                buffers[0].fill(usize::MAX);
-                buffers[1].fill(usize::MAX);
+                buffers[0].0.fill(true);
+                buffers[1].0.fill(true);
                 continue;
             }
 
@@ -265,17 +258,16 @@ impl Ppu {
             match win12_areas[0] {
                 LayerWin12Area::Disabled => {}
                 LayerWin12Area::Inside => {
-                    buffers[0].fill(usize::MAX);
-                    for i in win1_start as usize..=win1_end as usize {
-                        buffers[0][i >> WIN_BUFFER_ENTRY_SHIFT] &=
-                            !(1 << (i & WIN_BUFFER_BIT_MASK));
+                    buffers[0].0.fill(true);
+                    if win1_end >= win1_start {
+                        buffers[0].0[win1_start as usize..=win1_end as usize].fill(false);
                     }
                     win2_buffer_i = 1;
                 }
                 LayerWin12Area::Outside => {
-                    buffers[0].fill(0);
-                    for i in win1_start as usize..=win1_end as usize {
-                        buffers[0][i >> WIN_BUFFER_ENTRY_SHIFT] |= 1 << (i & WIN_BUFFER_BIT_MASK);
+                    buffers[0].0.fill(false);
+                    if win1_end >= win1_start {
+                        buffers[0].0[win1_start as usize..=win1_end as usize].fill(true);
                     }
                     win2_buffer_i = 1;
                 }
@@ -285,16 +277,15 @@ impl Ppu {
             match win12_areas[1] {
                 LayerWin12Area::Disabled => {}
                 LayerWin12Area::Inside => {
-                    win2_buffer.fill(usize::MAX);
-                    for i in win2_start as usize..=win2_end as usize {
-                        win2_buffer[i >> WIN_BUFFER_ENTRY_SHIFT] &=
-                            !(1 << (i & WIN_BUFFER_BIT_MASK));
+                    win2_buffer.0.fill(true);
+                    if win2_end >= win2_start {
+                        win2_buffer.0[win2_start as usize..=win2_end as usize].fill(false);
                     }
                 }
                 LayerWin12Area::Outside => {
-                    win2_buffer.fill(0);
-                    for i in win2_start as usize..=win2_end as usize {
-                        win2_buffer[i >> WIN_BUFFER_ENTRY_SHIFT] |= 1 << (i & WIN_BUFFER_BIT_MASK);
+                    win2_buffer.0.fill(false);
+                    if win2_end >= win2_start {
+                        win2_buffer.0[win2_start as usize..=win2_end as usize].fill(true);
                     }
                 }
             }
@@ -304,23 +295,23 @@ impl Ppu {
             {
                 match win12_mask {
                     LayerWin12Mask::Or => {
-                        for i in 0..WIN_BUFFER_LEN {
-                            buffers[0][i] &= buffers[1][i];
+                        for i in 0..VIEW_WIDTH {
+                            buffers[0].0[i] &= buffers[1].0[i];
                         }
                     }
                     LayerWin12Mask::And => {
-                        for i in 0..WIN_BUFFER_LEN {
-                            buffers[0][i] |= buffers[1][i];
+                        for i in 0..VIEW_WIDTH {
+                            buffers[0].0[i] |= buffers[1].0[i];
                         }
                     }
                     LayerWin12Mask::Xor => {
-                        for i in 0..WIN_BUFFER_LEN {
-                            buffers[0][i] = !(buffers[0][i] ^ buffers[1][i]);
+                        for i in 0..VIEW_WIDTH {
+                            buffers[0].0[i] = !(buffers[0].0[i] ^ buffers[1].0[i]);
                         }
                     }
                     LayerWin12Mask::Xnor => {
-                        for i in 0..WIN_BUFFER_LEN {
-                            buffers[0][i] ^= buffers[1][i];
+                        for i in 0..VIEW_WIDTH {
+                            buffers[0].0[i] ^= buffers[1].0[i];
                         }
                     }
                 }
@@ -332,34 +323,36 @@ impl Ppu {
                     0 | 3 => {}
                     2 => {
                         for (not_black, &outside_math_win) in not_black_buffer
+                            .0
                             .iter_mut()
-                            .zip(outside_math_win_buffer.iter())
+                            .zip(outside_math_win_buffer.0.iter())
                         {
                             *not_black = outside_math_win;
                         }
                     }
                     _ => {
                         for (not_black, &outside_math_win) in not_black_buffer
+                            .0
                             .iter_mut()
-                            .zip(outside_math_win_buffer.iter())
+                            .zip(outside_math_win_buffer.0.iter())
                         {
                             *not_black = !outside_math_win;
                         }
                     }
                 }
                 if self.color_math_control_a.color_math_mode() == 1 {
-                    for entry in &mut buffers[0] {
+                    for entry in &mut buffers[0].0 {
                         *entry = !*entry;
                     }
                 }
             } else if self.win_disabled_layer_masks[1] & 1 << layer_i != 0 {
                 let [main_buf, sub_buf] = buffers;
-                sub_buf.copy_from_slice(main_buf);
+                sub_buf.0.copy_from_slice(&main_buf.0);
                 if self.win_disabled_layer_masks[0] & 1 << layer_i == 0 {
-                    main_buf.fill(usize::MAX);
+                    main_buf.0.fill(true);
                 }
             } else {
-                buffers[1].fill(usize::MAX);
+                buffers[1].0.fill(true);
             }
         }
     }

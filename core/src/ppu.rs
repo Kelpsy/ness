@@ -122,15 +122,19 @@ pub enum Event {
     EndScanline,
 }
 
+#[repr(C, align(32))]
+#[derive(Clone, Copy)]
+struct Scanline<T, const LEN: usize>([T; LEN]);
+
 pub struct Ppu {
     pub(crate) frame_finished: bool,
 
     pub framebuffer: Box<Framebuffer>,
-    bg_line_pixels: [[ScreenPixel; FB_WIDTH]; 4],
-    main_screen_line: [ScreenPixel; VIEW_WIDTH],
-    sub_screen_line: [ScreenPixel; VIEW_WIDTH],
-    obj_line_pixels: [ScreenPixel; VIEW_WIDTH],
-    layer_window_masks: [[WindowMask; 2]; 6],
+    bg_line_pixels: [Scanline<ScreenPixel, FB_WIDTH>; 4],
+    main_screen_line: Scanline<ScreenPixel, VIEW_WIDTH>,
+    sub_screen_line: Scanline<ScreenPixel, VIEW_WIDTH>,
+    obj_line_pixels: Scanline<ScreenPixel, VIEW_WIDTH>,
+    layer_window_masks: [[Scanline<bool, VIEW_WIDTH>; 2]; 6],
     obj_tiles_in_time: u8,
 
     fb_height: usize,
@@ -208,11 +212,11 @@ impl Ppu {
             frame_finished: false,
 
             framebuffer: zeroed_box(),
-            bg_line_pixels: [[ScreenPixel(0); FB_WIDTH]; 4],
-            main_screen_line: [ScreenPixel(0); VIEW_WIDTH],
-            sub_screen_line: [ScreenPixel(0); VIEW_WIDTH],
-            obj_line_pixels: [ScreenPixel(0); VIEW_WIDTH],
-            layer_window_masks: [[[0; WIN_BUFFER_LEN]; 2]; 6],
+            bg_line_pixels: [Scanline([ScreenPixel(0); FB_WIDTH]); 4],
+            main_screen_line: Scanline([ScreenPixel(0); VIEW_WIDTH]),
+            sub_screen_line: Scanline([ScreenPixel(0); VIEW_WIDTH]),
+            obj_line_pixels: Scanline([ScreenPixel(0); VIEW_WIDTH]),
+            layer_window_masks: [[Scanline([false; VIEW_WIDTH]); 2]; 6],
             obj_tiles_in_time: 0,
 
             fb_height: view_height,

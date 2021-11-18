@@ -1,7 +1,4 @@
-use super::{
-    oam, BgIndex, ColorMathControlA, ColorMathControlB, Ppu, FB_WIDTH, VIEW_WIDTH,
-    WIN_BUFFER_BIT_MASK, WIN_BUFFER_ENTRY_SHIFT,
-};
+use super::{oam, BgIndex, Ppu, FB_WIDTH, VIEW_WIDTH};
 use crate::utils::bitfield_debug;
 
 bitfield_debug! {
@@ -29,11 +26,14 @@ fn direct_color_from_index(value: u8) -> u16 {
     (value as u16 & 0xC0) << 7 | (value as u16 & 0x38) << 4 | (value as u16 & 7) << 2
 }
 
-fn blend_pixels<const SUB: bool>(
+#[inline(always)]
+fn blend_pixels<
+    const MAYBE_DIV2_RESULT: bool,
+    const SUB_SCREEN_BG_OBJ_ENABLED: bool,
+    const SUB: bool,
+>(
     main: ScreenPixel,
     sub: ScreenPixel,
-    color_math_control_a: ColorMathControlA,
-    color_math_control_b: ColorMathControlB,
 ) -> u32 {
     let (main_r, main_g, main_b) = r_g_b_from_rgb5(main.0);
     let (sub_r, sub_g, sub_b) = r_g_b_from_rgb5(sub.0);
@@ -50,9 +50,7 @@ fn blend_pixels<const SUB: bool>(
             (main_b + sub_b).min(0x1F),
         )
     };
-    if color_math_control_b.div2_result()
-        && !main.forced_black()
-        && (!sub.backdrop() || !color_math_control_a.sub_screen_bg_obj_enabled())
+    if MAYBE_DIV2_RESULT && !main.forced_black() && (!sub.backdrop() || !SUB_SCREEN_BG_OBJ_ENABLED)
     {
         r >>= 1;
         g >>= 1;
@@ -72,12 +70,12 @@ impl Ppu {
 
         self.prepare_window_buffers();
 
-        self.main_screen_line.fill(
+        self.main_screen_line.0.fill(
             ScreenPixel(0)
                 .with_rgb(self.palette.contents[0])
                 .with_backdrop(true),
         );
-        self.sub_screen_line.fill(
+        self.sub_screen_line.0.fill(
             ScreenPixel(0)
                 .with_rgb(self.sub_backdrop_color)
                 .with_backdrop(true),
@@ -91,7 +89,7 @@ impl Ppu {
         if (self.enabled_main_screen_layers | self.enabled_sub_screen_layers) & 1 << 4 != 0
             && self.counters.v_counter() != 0
         {
-            self.obj_line_pixels.fill(ScreenPixel(0));
+            self.obj_line_pixels.0.fill(ScreenPixel(0));
 
             let obj_size_shifts: [(u8, u8); 2] = [
                 [(0, 0), (1, 1)],
@@ -177,18 +175,15 @@ impl Ppu {
 
         match self.color_math_control_a.force_main_screen_black() {
             1 | 2 => {
-                for (i, pixel) in self.main_screen_line.iter_mut().enumerate() {
-                    if self.layer_window_masks[5][1][i >> WIN_BUFFER_ENTRY_SHIFT]
-                        & 1 << (i & WIN_BUFFER_BIT_MASK)
-                        == 0
-                    {
+                for (i, pixel) in self.main_screen_line.0.iter_mut().enumerate() {
+                    if !self.layer_window_masks[5][1].0[i] {
                         pixel.set_rgb(0);
                         pixel.set_forced_black(true);
                     }
                 }
             }
             3 => {
-                for pixel in &mut self.main_screen_line {
+                for pixel in &mut self.main_screen_line.0 {
                     pixel.set_rgb(0);
                     pixel.set_forced_black(true);
                 }
@@ -202,49 +197,94 @@ impl Ppu {
         if self.color_math_control_a.color_math_mode() == 3 {
             if self.drawing_fb_x_shift {
                 for (i, fb_pixels) in fb_line.array_chunks_mut::<2>().enumerate() {
-                    fb_pixels[0] = self.sub_screen_line[i].rgb() as u32;
-                    fb_pixels[1] = self.main_screen_line[i].rgb() as u32;
+                    fb_pixels[0] = self.sub_screen_line.0[i].rgb() as u32;
+                    fb_pixels[1] = self.main_screen_line.0[i].rgb() as u32;
                 }
             } else {
                 for (i, fb_pixel) in fb_line.iter_mut().enumerate() {
-                    *fb_pixel = self.main_screen_line[i].rgb() as u32;
+                    *fb_pixel = self.main_screen_line.0[i].rgb() as u32;
                 }
             }
         } else {
-            let blend_pixels = [blend_pixels::<false>, blend_pixels::<true>]
-                [self.color_math_control_b.add_subtract() as usize];
-
             macro_rules! blend_pixels {
-                ($i: expr, $main: expr, $sub: expr) => {{
+                (
+                    $i: expr,
+                    $main: expr, $sub: expr,
+                    $maybe_div2_result: literal,
+                    $sub_screen_bg_obj_enabled: literal,
+                    $subtract: literal$(,)?
+                ) => {{
                     let main = $main;
-                    if self.layer_window_masks[5][0][$i >> WIN_BUFFER_ENTRY_SHIFT]
-                        & 1 << ($i & WIN_BUFFER_BIT_MASK)
-                        == 0
-                        || main.color_math_mask() & self.color_math_main_screen_mask == 0
+                    if self.layer_window_masks[5][0].0[$i]
+                        && main.color_math_mask() & self.color_math_main_screen_mask != 0
                     {
-                        main.rgb() as u32
-                    } else {
-                        blend_pixels(
-                            main,
-                            $sub,
-                            self.color_math_control_a,
-                            self.color_math_control_b,
+                        blend_pixels::<$maybe_div2_result, $sub_screen_bg_obj_enabled, $subtract>(
+                            main, $sub,
                         )
+                    } else {
+                        main.rgb() as u32
                     }
                 }};
             }
 
-            if self.drawing_fb_x_shift {
-                for (i, fb_pixels) in fb_line.array_chunks_mut::<2>().enumerate() {
-                    let main = self.main_screen_line[i];
-                    let sub = self.sub_screen_line[i];
-                    fb_pixels[0] = blend_pixels!(i, sub, main);
-                    fb_pixels[1] = blend_pixels!(i, main, sub);
+            macro_rules! draw_blended {
+                (
+                    $maybe_div2_result: literal,
+                    $sub_screen_bg_obj_enabled: literal,
+                    $subtract: literal$(,)?
+                ) => {
+                    if self.drawing_fb_x_shift {
+                        for (i, fb_pixels) in fb_line.array_chunks_mut::<2>().enumerate() {
+                            let main = self.main_screen_line.0[i];
+                            let sub = self.sub_screen_line.0[i];
+                            fb_pixels[0] = blend_pixels!(
+                                i,
+                                sub,
+                                main,
+                                $maybe_div2_result,
+                                $sub_screen_bg_obj_enabled,
+                                $subtract,
+                            );
+                            fb_pixels[1] = blend_pixels!(
+                                i,
+                                main,
+                                sub,
+                                $maybe_div2_result,
+                                $sub_screen_bg_obj_enabled,
+                                $subtract,
+                            );
+                        }
+                    } else {
+                        for (i, fb_pixel) in fb_line.iter_mut().enumerate() {
+                            *fb_pixel = blend_pixels!(
+                                i,
+                                self.main_screen_line.0[i],
+                                self.sub_screen_line.0[i],
+                                $maybe_div2_result,
+                                $sub_screen_bg_obj_enabled,
+                                $subtract,
+                            );
+                        }
+                    }
+                };
+            }
+
+            if self.color_math_control_b.div2_result() {
+                if self.color_math_control_b.add_subtract() {
+                    draw_blended!(false, false, true);
+                } else {
+                    draw_blended!(false, false, false);
                 }
             } else {
-                for (i, fb_pixel) in fb_line.iter_mut().enumerate() {
-                    *fb_pixel = blend_pixels!(i, self.main_screen_line[i], self.sub_screen_line[i]);
-                }
+                match (
+                    self.color_math_control_a.sub_screen_bg_obj_enabled(),
+                    self.color_math_control_b.add_subtract(),
+                ) {
+                    (false, false) => draw_blended!(false, false, false),
+                    (false, true) => draw_blended!(false, false, true),
+                    (true, false) => draw_blended!(false, true, false),
+                    (true, true) => draw_blended!(false, true, true),
+                };
             }
         }
 
@@ -280,15 +320,17 @@ impl Ppu {
     fn render_for_bg_mode<const BG_MODE: u8>(&mut self) {
         let layers_enabled = self.enabled_main_screen_layers | self.enabled_sub_screen_layers;
 
-        let bg_2bpp_pointers = [Self::draw_bg_text::<2, 0, 0>, Self::draw_bg_text::<2, 1, 1>];
-        let bg_4bpp_pointers = [Self::draw_bg_text::<4, 0, 0>, Self::draw_bg_text::<4, 1, 1>];
+        static BG_2BPP_POINTERS: [fn(&mut Ppu, BgIndex); 2] =
+            [Ppu::draw_bg_text::<2, 0, 0>, Ppu::draw_bg_text::<2, 1, 1>];
+        static BG_4BPP_POINTERS: [fn(&mut Ppu, BgIndex); 2] =
+            [Ppu::draw_bg_text::<4, 0, 0>, Ppu::draw_bg_text::<4, 1, 1>];
 
         if layers_enabled & 1 << 3 != 0 && BG_MODE == 0 {
-            bg_2bpp_pointers[(self.bg_tile_size_mask >> 3 & 1) as usize](self, BgIndex::new(3));
+            BG_2BPP_POINTERS[(self.bg_tile_size_mask >> 3 & 1) as usize](self, BgIndex::new(3));
         }
         if layers_enabled & 1 << 2 != 0 {
             match BG_MODE {
-                0 | 1 => bg_2bpp_pointers[(self.bg_tile_size_mask >> 2 & 1) as usize](
+                0 | 1 => BG_2BPP_POINTERS[(self.bg_tile_size_mask >> 2 & 1) as usize](
                     self,
                     BgIndex::new(2),
                 ),
@@ -300,7 +342,7 @@ impl Ppu {
         }
         if layers_enabled & 1 << 1 != 0 {
             match BG_MODE {
-                0 | 4 => bg_2bpp_pointers[(self.bg_tile_size_mask >> 1 & 1) as usize](
+                0 | 4 => BG_2BPP_POINTERS[(self.bg_tile_size_mask >> 1 & 1) as usize](
                     self,
                     BgIndex::new(1),
                 ),
@@ -310,7 +352,7 @@ impl Ppu {
                         self, BgIndex::new(1)
                     );
                 }
-                1 | 2 | 3 => bg_4bpp_pointers[(self.bg_tile_size_mask >> 1 & 1) as usize](
+                1 | 2 | 3 => BG_4BPP_POINTERS[(self.bg_tile_size_mask >> 1 & 1) as usize](
                     self,
                     BgIndex::new(1),
                 ),
@@ -320,9 +362,9 @@ impl Ppu {
         }
         if layers_enabled & 1 << 0 != 0 {
             match BG_MODE {
-                0 => bg_2bpp_pointers[(self.bg_tile_size_mask & 1) as usize](self, BgIndex::new(0)),
+                0 => BG_2BPP_POINTERS[(self.bg_tile_size_mask & 1) as usize](self, BgIndex::new(0)),
                 1..=2 => {
-                    bg_4bpp_pointers[(self.bg_tile_size_mask & 1) as usize](self, BgIndex::new(0))
+                    BG_4BPP_POINTERS[(self.bg_tile_size_mask & 1) as usize](self, BgIndex::new(0))
                 }
                 3..=4 => [Self::draw_bg_text::<8, 0, 0>, Self::draw_bg_text::<8, 1, 1>]
                     [(self.bg_tile_size_mask & 1) as usize](
@@ -346,13 +388,13 @@ impl Ppu {
             ) => {
                 #[allow(clippy::unnecessary_operation)]
                 {
-                    let $line = &mut self.main_screen_line;
+                    let $line = &mut self.main_screen_line.0;
                     let $layers = self.enabled_main_screen_layers;
                     let $screen_i = 0;
                     let $line_pixels_bit0 = self.fb_x_shift as usize;
                     $render;
                     if self.color_math_control_a.sub_screen_bg_obj_enabled() || self.fb_x_shift {
-                        let $line = &mut self.sub_screen_line;
+                        let $line = &mut self.sub_screen_line.0;
                         let $layers = self.enabled_sub_screen_layers;
                         let $screen_i = 1;
                         let $line_pixels_bit0 = 0;
@@ -370,13 +412,10 @@ impl Ppu {
                 $prio: literal $(mask $prio_mask: expr)?,
                 $line_pixels_bit0: expr$(,)?
             ) => {
-                #[allow(clippy::unused_parens)]
                 for (i, dst_pixel) in $dst.iter_mut().enumerate() {
                     let color =
-                        self.bg_line_pixels[$i][i << self.fb_x_shift as u8 | $line_pixels_bit0];
-                    if self.layer_window_masks[$i][$screen_i][i >> WIN_BUFFER_ENTRY_SHIFT]
-                        & 1 << (i & WIN_BUFFER_BIT_MASK)
-                        != 0
+                        self.bg_line_pixels[$i].0[i << self.fb_x_shift as u8 | $line_pixels_bit0];
+                    if self.layer_window_masks[$i][$screen_i].0[i]
                         && color.bg_priority() $(& ($prio_mask | 2))* == $prio | 2
                     {
                         *dst_pixel = color;
@@ -393,12 +432,9 @@ impl Ppu {
                 $prio: literal $(mask $prio_mask: expr)?$(,)?
             ) => {
                 if $layers & 1 << 4 != 0 && self.counters.v_counter() != 0 {
-                    #[allow(clippy::unused_parens)]
                     for (i, dst_pixel) in $dst.iter_mut().enumerate() {
-                        let color = self.obj_line_pixels[i];
-                        if self.layer_window_masks[4][$screen_i][i >> WIN_BUFFER_ENTRY_SHIFT]
-                            & 1 << (i & WIN_BUFFER_BIT_MASK)
-                            != 0
+                        let color = self.obj_line_pixels.0[i];
+                        if self.layer_window_masks[4][$screen_i].0[i]
                             && color.obj_priority() $(& ($prio_mask | 4))* == $prio | 4
                         {
                             *dst_pixel = color;
@@ -597,7 +633,7 @@ impl Ppu {
         let mut tile_pixels = [ScreenPixel(0); 16];
         let mut start_tile_x_half = (start_x as usize & tile_size_x_mask) >> 3 & 1;
 
-        for (line_x, line_pixel) in self.bg_line_pixels[bg_index.get() as usize][..fb_width]
+        for (line_x, line_pixel) in self.bg_line_pixels[bg_index.get() as usize].0[..fb_width]
             .iter_mut()
             .enumerate()
         {
@@ -723,7 +759,7 @@ impl Ppu {
         let mut mosaic_counter = 1;
         let mut pixel = ScreenPixel(0);
 
-        for line_pixels in self.bg_line_pixels[EXTBG as usize]
+        for line_pixels in self.bg_line_pixels[EXTBG as usize].0
             [..VIEW_WIDTH << self.fb_x_shift as usize]
             .chunks_exact_mut(self.fb_x_shift as usize + 1)
         {
@@ -846,7 +882,7 @@ impl Ppu {
             let color_index = tile_pixels[x as usize & 7];
             if color_index != 0 {
                 let color = self.palette.contents[(pal_base | color_index) as usize];
-                self.obj_line_pixels[line_x] = pixel_attrs.with_rgb(color);
+                self.obj_line_pixels.0[line_x] = pixel_attrs.with_rgb(color);
             }
             line_x += 1;
         }

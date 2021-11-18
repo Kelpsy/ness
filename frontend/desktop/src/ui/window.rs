@@ -10,7 +10,7 @@ use std::{path::PathBuf, time::Instant};
 use winit::platform::macos::WindowExtMacOS;
 use winit::{
     dpi::{LogicalSize, PhysicalSize},
-    event::{Event, WindowEvent},
+    event::{Event, StartCause, WindowEvent},
     event_loop::{ControlFlow as WinitControlFlow, EventLoop},
     window::{Window as WinitWindow, WindowBuilder as WinitWindowBuilder},
 };
@@ -271,37 +271,31 @@ impl Builder {
         let mut on_exit = ManuallyDrop::new(on_exit);
 
         self.event_loop.run(move |event, _, control_flow| {
-            *control_flow = WinitControlFlow::Poll;
             let window = &mut *window_;
             window
                 .imgui_winit_platform
                 .handle_event(self.imgui.io_mut(), &window.window, &event);
             process_event(window, &mut state, &event);
             match event {
+                Event::NewEvents(StartCause::Init) => {
+                    *control_flow = WinitControlFlow::Wait;
+                }
+
                 Event::WindowEvent {
                     event: WindowEvent::CloseRequested,
                     ..
                 } => {
                     *control_flow = WinitControlFlow::Exit;
                 }
+
                 Event::WindowEvent {
                     event: WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. },
                     ..
                 } => {
                     window.gfx.device_state.invalidate_swapchain();
                 }
-                Event::MainEventsCleared => {
-                    // TODO: https://github.com/rust-windowing/winit/issues/2022
-                    #[cfg(target_os = "macos")]
-                    let window_visible =
-                        unsafe { (window.window.ns_window() as id).occlusionState() }
-                            .contains(NSWindowOcclusionState::NSWindowOcclusionStateVisible);
-                    #[cfg(not(target_os = "macos"))]
-                    let window_visible = true;
-                    if !window_visible && !window.is_hidden {
-                        return;
-                    }
 
+                Event::RedrawRequested(_) => {
                     let now = Instant::now();
                     let io = self.imgui.io_mut();
                     io.update_delta_time(now - window.last_frame);
@@ -321,12 +315,27 @@ impl Builder {
                         .prepare_render(&ui, &window.window);
                     window.gfx.redraw(ui.render(), window.window.inner_size());
                     window.gfx.device_state.device.poll(wgpu::Maintain::Poll);
+                }
 
+                Event::RedrawEventsCleared => {
                     if window.is_hidden {
                         window.is_hidden = false;
                         window.window.set_visible(true);
                     }
+
+                    // TODO: https://github.com/rust-windowing/winit/issues/2022
+                    // Mitigation for https://github.com/gfx-rs/wgpu/issues/1783
+                    #[cfg(target_os = "macos")]
+                    let window_visible =
+                        unsafe { (window.window.ns_window() as id).occlusionState() }
+                            .contains(NSWindowOcclusionState::NSWindowOcclusionStateVisible);
+                    #[cfg(not(target_os = "macos"))]
+                    let window_visible = true;
+                    if window_visible {
+                        window.window.request_redraw();
+                    }
                 }
+
                 Event::LoopDestroyed => {
                     unsafe {
                         ManuallyDrop::take(&mut on_exit)(
