@@ -227,7 +227,7 @@ macro_rules! declare_structs {
                 $s_view_ident: Option<($s_view_ty, bool)>,
             )*
             $(
-                $i_view_ident: (FxHashMap<ViewKey, ($i_view_ty, bool)>, ViewKey),
+                $i_view_ident: FxHashMap<ViewKey, ($i_view_ty, bool)>,
             )*
         }
 
@@ -241,7 +241,7 @@ macro_rules! declare_structs {
                         $s_view_ident: None,
                     )*
                     $(
-                        $i_view_ident: (FxHashMap::default(), 0),
+                        $i_view_ident: FxHashMap::default(),
                     )*
                 }
             }
@@ -257,7 +257,7 @@ macro_rules! declare_structs {
                     }
                 )*
                 $(
-                    for (key, (view, visible)) in &mut self.$i_view_ident.0 {
+                    for (key, (view, visible)) in &mut self.$i_view_ident {
                         if !*visible {
                             continue;
                         }
@@ -278,7 +278,7 @@ macro_rules! declare_structs {
                     }
                 )*
                 $(
-                    for (key, (view, visible)) in &self.$i_view_ident.0 {
+                    for (key, (view, visible)) in &self.$i_view_ident {
                         let emu_state = view.emu_state();
                         self.messages.push(Message::$i_update_emu_state_message_ident(
                             *key,
@@ -311,11 +311,13 @@ macro_rules! declare_structs {
                 ui.separator();
                 $(
                     if MenuItem::new(<$i_view_ty>::NAME).build(ui) {
-                        let key = self.$i_view_ident.1;
-                        self.$i_view_ident.1 += 1;
+                        let mut key = 0;
+                        while self.$i_view_ident.contains_key(&key) {
+                            key += 1;
+                        }
                         let view = <$i_view_ty>::new(window);
                         let emu_state = view.emu_state();
-                        self.$i_view_ident.0.insert(key, (view, true));
+                        self.$i_view_ident.insert(key, (view, true));
                         self.messages.push(Message::$i_update_emu_state_message_ident(
                             key,
                             Some((emu_state, true)),
@@ -359,14 +361,14 @@ macro_rules! declare_structs {
                     }
                 )*
                 $(
-                    let closed_views: Vec<_> = self.$i_view_ident.0.drain_filter(
+                    let closed_views: Vec<_> = self.$i_view_ident.drain_filter(
                         |key, (view, visible)| {
                             let mut opened = true;
                             let was_visible = *visible;
                             let mut new_emu_state = None;
                             view.customize_window(
                                 ui,
-                                imgui::Window::new(&format!("{}##{}", <$i_view_ty>::NAME, *key))
+                                imgui::Window::new(&format!("{} {}", <$i_view_ty>::NAME, *key))
                                     .opened(&mut opened),
                             ).build(ui, || {
                                 *visible = true;
