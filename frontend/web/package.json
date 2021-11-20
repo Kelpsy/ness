@@ -1,0 +1,26 @@
+{
+    "name": "ness-web",
+    "private": true,
+    "scripts": {
+        "watch": "webpack -w",
+        "build": "webpack",
+        "start": "webpack serve"
+    },
+    "devDependencies": {
+        "@fortawesome/fontawesome-free": "^5.15.3",
+        "@wasm-tool/wasm-pack-plugin": "^1.6.0",
+        "clean-webpack-plugin": "^4.0.0",
+        "copy-webpack-plugin": "^10.0.0",
+        "css-loader": "^6.5.1",
+        "css-minimizer-webpack-plugin": "^3.1.4",
+        "fork-ts-checker-webpack-plugin": "^6.4.0",
+        "less": "^4.1.2",
+        "less-loader": "^10.2.0",
+        "mini-css-extract-plugin": "^2.4.5",
+        "ts-loader": "^9.2.6",
+        "typescript": "^4.5.2",
+        "webpack": "^5.64.1",
+        "webpack-cli": "^4.9.1",
+        "webpack-dev-server": "^4.5.0"
+    }
+}
