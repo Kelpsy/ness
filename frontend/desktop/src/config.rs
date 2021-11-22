@@ -41,6 +41,7 @@ pub struct Global {
     pub autosave_interval_ms: f32,
     pub save_dir_path: PathBuf,
 
+    pub audio_volume: f32,
     pub fullscreen_render: bool,
     pub cart_db_path: PathBuf,
     pub board_db_path: PathBuf,
@@ -62,6 +63,7 @@ impl Default for Global {
             autosave_interval_ms: 1000.0,
             save_dir_path: data_base.join("saves"),
 
+            audio_volume: 1.0,
             fullscreen_render: true,
             cart_db_path: data_base.join("db/carts.bml"),
             board_db_path: data_base.join("db/boards.bml"),

@@ -131,12 +131,16 @@ pub struct Channel {
     pub output_stream: OutputStream,
 }
 
-pub fn channel(interp_method: InterpMethod) -> Option<Channel> {
+pub fn channel(interp_method: InterpMethod, volume: f32) -> Option<Channel> {
     let buffer = Buffer::new_arc();
     Some(Channel {
         tx_data: SenderData {
             buffer: Arc::clone(&buffer),
         },
-        output_stream: OutputStream::new(Receiver { buffer }, interp_method.create_interp())?,
+        output_stream: OutputStream::new(
+            Receiver { buffer },
+            interp_method.create_interp(),
+            volume,
+        )?,
     })
 }

@@ -347,7 +347,10 @@ pub fn main() {
         global_config.contents.imgui_config_path.clone(),
     ));
 
-    let audio_channel = audio::channel(global_config.contents.audio_interp_method);
+    let audio_channel = audio::channel(
+        global_config.contents.audio_interp_method,
+        global_config.contents.audio_volume,
+    );
 
     let (frame_tx, frame_rx) = triple_buffer::init([
         FrameData::default(),
@@ -667,6 +670,21 @@ pub fn main() {
                                 }
                             }
                         }
+
+                        ui.menu_with_enabled("Audio volume", state.audio_channel.is_some(), || {
+                            let output_stream =
+                                &mut state.audio_channel.as_mut().unwrap().output_stream;
+                            let mut volume = output_stream.volume() * 100.0;
+                            if imgui::Slider::new("", 0.0, 100.0)
+                                .display_format("%.02f%%")
+                                .build(ui, &mut volume)
+                            {
+                                volume = (volume * 100.0).round().clamp(0.0, 10000.0) / 10000.0;
+                                output_stream.set_volume(volume);
+                                state.global_config.contents.audio_volume = volume;
+                                state.global_config.dirty = true;
+                            }
+                        });
 
                         if imgui::MenuItem::new("Limit framerate")
                             .build_with_ref(ui, &mut state.limit_framerate.value)
