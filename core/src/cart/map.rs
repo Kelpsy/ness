@@ -51,6 +51,7 @@ pub(super) fn reduce(mut addr: u32, mut mask: u32) -> u32 {
 
 pub type Index = u16;
 
+#[derive(Clone)]
 pub struct Map {
     pub read_offsets: Box<[Index; Self::ENTRIES]>,
     pub write_offsets: Box<[Index; Self::ENTRIES]>,

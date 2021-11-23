@@ -658,6 +658,16 @@ pub fn main() {
                                 .expect("Couldn't send UI message");
                         }
 
+                        if imgui::MenuItem::new("Hard reset")
+                            .enabled(state.emu_thread.is_some())
+                            .build(ui)
+                        {
+                            state
+                                .message_tx
+                                .send(emu::Message::HardReset)
+                                .expect("Couldn't send UI message");
+                        }
+
                         if imgui::MenuItem::new("Stop")
                             .enabled(state.emu_thread.is_some())
                             .build(ui)

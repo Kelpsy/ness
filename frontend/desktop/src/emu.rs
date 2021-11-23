@@ -26,6 +26,7 @@ pub enum Message {
     #[cfg(feature = "debug-views")]
     DebugViews(debug_views::Message),
     SoftReset,
+    HardReset,
     Stop,
 }
 
@@ -40,7 +41,7 @@ pub(super) fn main(
 ) -> triple_buffer::Sender<FrameData> {
     let mut emu = Emu::new(
         config.model,
-        cart,
+        cart.clone(),
         match &audio_tx_data {
             Some(data) => Box::new(audio::Sender::new(data, config.sync_to_audio.value)),
             None => Box::new(DummyAudioBackend),
@@ -111,6 +112,26 @@ pub(super) fn main(
 
                 Message::SoftReset => {
                     emu.soft_reset();
+                }
+
+                Message::HardReset => {
+                    if let Some(save_path) = &cur_save_path {
+                        save!(save_path);
+                    }
+
+                    emu = Emu::new(
+                        config.model,
+                        cart.clone(),
+                        match &audio_tx_data {
+                            Some(data) => {
+                                Box::new(audio::Sender::new(data, config.sync_to_audio.value))
+                            }
+                            None => Box::new(DummyAudioBackend),
+                        },
+                        512, // TODO: Make configurable?
+                        #[cfg(feature = "log")]
+                        &logger,
+                    );
                 }
 
                 Message::Stop => {

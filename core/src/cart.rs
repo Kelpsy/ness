@@ -5,6 +5,7 @@ use crate::utils::BoxedByteSlice;
 use info::Info;
 use map::Map;
 
+#[derive(Clone)]
 pub struct Cart {
     rom: BoxedByteSlice,
     ram: BoxedByteSlice,
