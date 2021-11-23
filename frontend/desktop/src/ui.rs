@@ -71,6 +71,7 @@ fn init_logging(
 }
 
 struct UiState {
+    config_home: PathBuf,
     global_config: Config<config::Global>,
     game_config: Option<Config<config::Game>>,
     game_title: Option<String>,
@@ -117,9 +118,110 @@ struct UiState {
     presence_updated: bool,
 }
 
+static ALLOWED_ROM_EXTENSIONS: &[&str] = &["sfc", "smc", "bin"];
+
 impl UiState {
     fn send_message(&self, msg: emu::Message) {
         self.message_tx.send(msg).expect("Couldn't send UI message");
+    }
+
+    fn load_from_rom_path(&mut self, path: &Path) {
+        use core::fmt::Write;
+
+        if let Some(extension) = path.extension().and_then(|s| s.to_str()) {
+            if !ALLOWED_ROM_EXTENSIONS.contains(&extension) {
+                return;
+            }
+        } else {
+            return;
+        }
+
+        let rom = {
+            let mut rom_file = File::open(path).expect("Couldn't load the specified ROM file");
+            let mut rom_len = rom_file
+                .metadata()
+                .expect("Couldn't get ROM file metadata")
+                .len() as usize;
+            if rom_len & 0x200 != 0 {
+                rom_len -= 0x200;
+                rom_file
+                    .seek(SeekFrom::Start(0x200))
+                    .expect("Couldn't seek in ROM file");
+            }
+            let mut rom = BoxedByteSlice::new_zeroed(rom_len);
+            rom_file
+                .read_exact(&mut rom[..])
+                .expect("Couldn't read ROM file");
+            rom
+        };
+
+        let (cart_info, cart_header, cart_info_source) = cart::info::Info::new(
+            ByteSlice::new(&rom[..]),
+            self.cart_db
+                .as_ref()
+                .map(|db| (db, <sha2::Sha256 as sha2::Digest>::digest(&rom[..]).into())),
+        );
+
+        match cart_info_source {
+            cart::info::Source::Db => {}
+            cart::info::Source::Guess => {
+                #[cfg(feature = "log")]
+                slog::warn!(self.logger, "Couldn't find cart in database, guessing info");
+            }
+            cart::info::Source::Default => {
+                #[cfg(feature = "log")]
+                slog::error!(self.logger, "Couldn't guess cart info, defaulting to LoROM");
+            }
+        }
+
+        let game_title = cart_info
+            .title
+            .as_deref()
+            .unwrap_or_else(|| {
+                path.file_stem()
+                    .unwrap()
+                    .to_str()
+                    .expect("Non-UTF-8 ROM filename provided")
+            })
+            .to_string();
+
+        let game_config = {
+            let mut config_path = self.config_home.join("games").join(&game_title);
+            config_path.set_extension("json");
+            let (config, save_config) =
+                Config::<config::Game>::read_from_file_or_show_dialog(&config_path, &game_title);
+            config.unwrap_or_else(move || {
+                if save_config {
+                    Config {
+                        contents: config::Game::default(),
+                        dirty: true,
+                        path: Some(config_path),
+                    }
+                } else {
+                    Config::default()
+                }
+            })
+        };
+
+        match config::launch_config(
+            &self.global_config.contents,
+            &game_config.contents,
+            cart_header.as_ref(),
+            &game_title,
+        ) {
+            Ok(launch_config) => {
+                self.start(launch_config, game_title, game_config, rom, cart_info);
+            }
+            Err(errors) => {
+                config_error!(
+                    "Couldn't determine final configuration for game: {}",
+                    errors.into_iter().fold(String::new(), |mut acc, err| {
+                        let _ = write!(acc, "\n- {}", err);
+                        acc
+                    })
+                );
+            }
+        }
     }
 
     fn start(
@@ -398,6 +500,7 @@ pub fn main() {
     clear_fb_texture(fb_texture_id, &mut window_builder.window);
 
     let mut state = UiState {
+        config_home,
         game_config: None,
         game_title: None,
         cart_db,
@@ -451,9 +554,23 @@ pub fn main() {
 
     state.stop();
 
+    if let Some(rom_path) = env::args_os().nth(1) {
+        state.load_from_rom_path(Path::new(&rom_path));
+    }
+
     window_builder.run(
         state,
         |_, state, event| {
+            use winit::event::{Event, WindowEvent};
+
+            if let Event::WindowEvent {
+                event: WindowEvent::DroppedFile(path),
+                ..
+            } = event
+            {
+                state.load_from_rom_path(path);
+            }
+
             state.input.process_event(event, state.screen_focused);
         },
         move |window, ui, state| {
@@ -522,8 +639,6 @@ pub fn main() {
             if state.show_menu_bar {
                 ui.main_menu_bar(|| {
                     ui.menu("Emulation", || {
-                        use core::fmt::Write;
-
                         if imgui::MenuItem::new(if state.playing { "Pause" } else { "Play" })
                             .enabled(state.emu_thread.is_some())
                             .build(ui)
@@ -553,121 +668,10 @@ pub fn main() {
 
                         if imgui::MenuItem::new("Load game...").build(ui) {
                             if let Some(path) = FileDialog::new()
-                                .add_filter("SNES ROM file", &["sfc", "smc", "bin"])
+                                .add_filter("SNES ROM file", ALLOWED_ROM_EXTENSIONS)
                                 .pick_file()
                             {
-                                let rom = {
-                                    let mut rom_file = File::open(&path)
-                                        .expect("Couldn't load the specified ROM file");
-                                    let mut rom_len = rom_file
-                                        .metadata()
-                                        .expect("Couldn't get ROM file metadata")
-                                        .len()
-                                        as usize;
-                                    if rom_len & 0x200 != 0 {
-                                        rom_len -= 0x200;
-                                        rom_file
-                                            .seek(SeekFrom::Start(0x200))
-                                            .expect("Couldn't seek in ROM file");
-                                    }
-                                    let mut rom = BoxedByteSlice::new_zeroed(rom_len);
-                                    rom_file
-                                        .read_exact(&mut rom[..])
-                                        .expect("Couldn't read ROM file");
-                                    rom
-                                };
-
-                                let (cart_info, cart_header, cart_info_source) =
-                                    cart::info::Info::new(
-                                        ByteSlice::new(&rom[..]),
-                                        state.cart_db.as_ref().map(|db| {
-                                            (
-                                                db,
-                                                <sha2::Sha256 as sha2::Digest>::digest(&rom[..])
-                                                    .into(),
-                                            )
-                                        }),
-                                    );
-
-                                match cart_info_source {
-                                    cart::info::Source::Db => {}
-                                    cart::info::Source::Guess => {
-                                        #[cfg(feature = "log")]
-                                        slog::warn!(
-                                            state.logger,
-                                            "Couldn't find cart in database, guessing info"
-                                        );
-                                    }
-                                    cart::info::Source::Default => {
-                                        #[cfg(feature = "log")]
-                                        slog::error!(
-                                            state.logger,
-                                            "Couldn't guess cart info, defaulting to LoROM"
-                                        );
-                                    }
-                                }
-
-                                let game_title = cart_info
-                                    .title
-                                    .as_deref()
-                                    .unwrap_or_else(|| {
-                                        path.file_stem()
-                                            .unwrap()
-                                            .to_str()
-                                            .expect("Non-UTF-8 ROM filename provided")
-                                    })
-                                    .to_string();
-
-                                let game_config = {
-                                    let mut config_path =
-                                        config_home.join("games").join(&game_title);
-                                    config_path.set_extension("json");
-                                    let (config, save_config) =
-                                        Config::<config::Game>::read_from_file_or_show_dialog(
-                                            &config_path,
-                                            &game_title,
-                                        );
-                                    config.unwrap_or_else(move || {
-                                        if save_config {
-                                            Config {
-                                                contents: config::Game::default(),
-                                                dirty: true,
-                                                path: Some(config_path),
-                                            }
-                                        } else {
-                                            Config::default()
-                                        }
-                                    })
-                                };
-
-                                match config::launch_config(
-                                    &state.global_config.contents,
-                                    &game_config.contents,
-                                    cart_header.as_ref(),
-                                    &game_title,
-                                ) {
-                                    Ok(launch_config) => {
-                                        state.start(
-                                            launch_config,
-                                            game_title,
-                                            game_config,
-                                            rom,
-                                            cart_info,
-                                        );
-                                    }
-                                    Err(errors) => {
-                                        config_error!(
-                                            "Couldn't determine final configuration for game: {}",
-                                            errors.into_iter().fold(
-                                                String::new(),
-                                                |mut acc, err| {
-                                                    let _ = write!(acc, "\n- {}", err);
-                                                    acc
-                                                }
-                                            )
-                                        );
-                                    }
-                                }
+                                state.load_from_rom_path(&path);
                             }
                         }
 
