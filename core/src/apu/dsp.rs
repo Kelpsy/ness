@@ -35,7 +35,7 @@ pub struct Dsp {
     #[cfg(feature = "log")]
     logger: slog::Logger,
     pub backend: Box<dyn Backend>,
-    sample_chunk_len: usize,
+    pub sample_chunk_len: usize,
     sample_chunk: Vec<[Sample; 2]>,
 
     pub channels: [Channel; 8],

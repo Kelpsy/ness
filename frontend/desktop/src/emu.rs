@@ -22,6 +22,7 @@ pub struct SharedState {
 pub enum Message {
     UpdateInput(input::Changes),
     UpdateSavePath(Option<PathBuf>),
+    UpdateAudioSampleChunkSize(u32),
     UpdateAudioSync(bool),
     #[cfg(feature = "debug-views")]
     DebugViews(debug_views::Message),
@@ -46,7 +47,7 @@ pub(super) fn main(
             Some(data) => Box::new(audio::Sender::new(data, config.sync_to_audio.value)),
             None => Box::new(DummyAudioBackend),
         },
-        512, // TODO: Make configurable?
+        config.audio_sample_chunk_size as usize,
         #[cfg(feature = "log")]
         &logger,
     );
@@ -99,6 +100,10 @@ pub(super) fn main(
                     cur_save_path = new_path;
                 }
 
+                Message::UpdateAudioSampleChunkSize(chunk_size) => {
+                    emu.apu.dsp.sample_chunk_len = chunk_size as usize;
+                }
+
                 Message::UpdateAudioSync(new_audio_sync) => {
                     if let Some(data) = &audio_tx_data {
                         emu.apu.dsp.backend = Box::new(audio::Sender::new(data, new_audio_sync));
@@ -128,7 +133,7 @@ pub(super) fn main(
                             }
                             None => Box::new(DummyAudioBackend),
                         },
-                        512, // TODO: Make configurable?
+                        emu.apu.dsp.sample_chunk_len,
                         #[cfg(feature = "log")]
                         &logger,
                     );

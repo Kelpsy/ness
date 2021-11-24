@@ -42,6 +42,7 @@ pub struct Global {
     pub save_dir_path: PathBuf,
 
     pub audio_volume: f32,
+    pub audio_sample_chunk_size: u32,
     pub fullscreen_render: bool,
     pub cart_db_path: PathBuf,
     pub board_db_path: PathBuf,
@@ -64,6 +65,7 @@ impl Default for Global {
             save_dir_path: data_base.join("saves"),
 
             audio_volume: 1.0,
+            audio_sample_chunk_size: 512,
             fullscreen_render: true,
             cart_db_path: data_base.join("db/carts.bml"),
             board_db_path: data_base.join("db/boards.bml"),
@@ -217,6 +219,7 @@ pub struct LaunchConfig {
     pub pause_on_launch: bool,
     pub autosave_interval_ms: RuntimeModifiable<f32>,
     pub cur_save_path: Option<PathBuf>,
+    pub audio_sample_chunk_size: u32,
 }
 
 #[derive(Debug)]
@@ -327,5 +330,6 @@ pub fn launch_config(
         pause_on_launch,
         autosave_interval_ms,
         cur_save_path,
+        audio_sample_chunk_size: global_config.audio_sample_chunk_size,
     })
 }
