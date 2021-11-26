@@ -1,4 +1,4 @@
-// const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin");
+const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin");
 const { CleanWebpackPlugin } = require("clean-webpack-plugin");
 const { resolve, join } = require("path");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
@@ -7,6 +7,7 @@ const CopyPlugin = require("copy-webpack-plugin");
 const fontawesomePath = require.resolve("@fortawesome/fontawesome-free");
 
 const src = resolve(__dirname, "src");
+const emuSrc = resolve(src, "emu");
 const dist = resolve(__dirname, "dist");
 
 const mode = "development";
@@ -14,21 +15,25 @@ const sourceMap = mode === "development";
 const optimize = mode === "production";
 
 const plugins = [
-    // new WasmPackPlugin({
-    //     crateDirectory: resolve(__dirname, "crate"),
-    //     watchDirectories: [
-    //         resolve(__dirname, "../../core"),
-    //     ],
-    //     forceMode: "production",
-    // }),
+    new WasmPackPlugin({
+        crateDirectory: resolve(__dirname, "crate"),
+        watchDirectories: [resolve(__dirname, "../../core")],
+        outDir: resolve(__dirname, "pkg"),
+        forceMode: "production",
+        pluginLogLevel: "warn",
+    }),
     new CleanWebpackPlugin(),
     new MiniCssExtractPlugin(),
     new CopyPlugin({
         patterns: [
             resolve(src, "index.html"),
-            resolve(src, "test.png"),
+            resolve(src, "resources"),
+            { from: resolve(__dirname, "../../db"), to: "resources/db" },
             { from: join(fontawesomePath, "../../css"), to: "fontawesome/css" },
-            { from: join(fontawesomePath, "../../webfonts"), to: "fontawesome/webfonts" },
+            {
+                from: join(fontawesomePath, "../../webfonts"),
+                to: "fontawesome/webfonts",
+            },
         ],
     }),
 ];
@@ -39,25 +44,26 @@ if (optimize) {
             cssProcessorPluginOptions: {
                 preset: ["default", { discardComments: true }],
             },
-        }),
+        })
     );
-} else {
-    plugins.push(new (require("fork-ts-checker-webpack-plugin"))());
 }
 
-module.exports = {
+function pluginsForDir(dir) {
+    if (optimize) {
+        return plugins;
+    }
+    return plugins.concat(
+        new (require("fork-ts-checker-webpack-plugin"))({
+            typescript: {
+                configFile: join(dir, "tsconfig.json"),
+            },
+        })
+    );
+}
+
+const baseConfig = {
     context: resolve(__dirname),
-    entry: [
-        resolve(src, "main.less"),
-        resolve(src, "main.ts"),
-    ],
-    devServer: {
-        static: [dist],
-        compress: true,
-        host: "0.0.0.0",
-        port: 2626,
-    },
-    devtool: sourceMap ? "eval-source-map" : undefined,
+    devtool: sourceMap ? "source-map" : undefined,
     plugins,
     module: {
         rules: [
@@ -104,7 +110,7 @@ module.exports = {
                     loader: "ts-loader",
                     options: {
                         transpileOnly: !optimize,
-                        configFile: resolve(__dirname, "tsconfig.json"),
+                        configFile: "tsconfig.json",
                         compilerOptions: {
                             sourceMap,
                         },
@@ -121,14 +127,53 @@ module.exports = {
         path: dist,
     },
     experiments: {
-        asyncWebAssembly: true,
+        syncWebAssembly: true,
     },
-    optimization: optimize ? {
-        minimize: true,
-        minimizer: [new (require("css-minimizer-webpack-plugin"))(), "..."],
-    } : {},
+    optimization: optimize
+        ? {
+              minimize: true,
+              minimizer: [
+                  new (require("css-minimizer-webpack-plugin"))(),
+                  "...",
+              ],
+          }
+        : {},
     watchOptions: {
         ignored: ["**/node_modules", "dist"],
     },
     mode,
 };
+
+module.exports = [
+    Object.assign(
+        {
+            plugins: pluginsForDir(resolve(src, "ui")),
+            entry: {
+                ui: [
+                    resolve(src, "styles/main.less"),
+                    resolve(src, "ui/ui.ts"),
+                ],
+            },
+            devServer: {
+                static: [dist],
+                compress: true,
+                host: "0.0.0.0",
+                port: 2626,
+                hot: false,
+                liveReload: false,
+                webSocketServer: false,
+            },
+        },
+        baseConfig
+    ),
+    Object.assign(
+        {
+            plugins: pluginsForDir(resolve(src, "emu")),
+            entry: {
+                emu: resolve(src, "emu/emu.ts"),
+            },
+            target: "webworker",
+        },
+        baseConfig
+    ),
+];

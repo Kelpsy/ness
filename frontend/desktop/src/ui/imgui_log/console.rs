@@ -20,30 +20,30 @@ impl<'a> LoggerValuesSerializer<'a> {
     fn finish(&mut self) -> usize {
         let mut indent = 0;
         for buf in self.buf.drain(..).rev() {
-            enum KvHistoryAction {
+            enum HistoryAction {
                 None,
                 Push,
                 Change,
             }
-            let action = if let Some(prev) = self.logger_values_history.get_mut(indent) {
+            let action = if let Some(prev) = self.logger_values_history.get(indent) {
                 if *prev != buf {
-                    KvHistoryAction::Change
+                    HistoryAction::Change
                 } else {
-                    KvHistoryAction::None
+                    HistoryAction::None
                 }
             } else {
-                KvHistoryAction::Push
+                HistoryAction::Push
             };
             match action {
-                KvHistoryAction::None => {}
-                KvHistoryAction::Push => {
+                HistoryAction::None => {}
+                HistoryAction::Push => {
                     self.logger_values_history.push(buf);
                     let (k, v) = &self.logger_values_history[indent];
                     let group_str = format!("{}: {}", k, v);
                     self.history
                         .push((indent as f32, HistoryNode::Group(group_str)));
                 }
-                KvHistoryAction::Change => {
+                HistoryAction::Change => {
                     self.logger_values_history.truncate(indent);
                     self.logger_values_history.push(buf);
                     let (k, v) = &self.logger_values_history[indent];

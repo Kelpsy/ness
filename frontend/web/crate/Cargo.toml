@@ -1,0 +1,21 @@
+[package]
+name = "ness-web"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = ["log"]
+log = ["slog", "ness-core/log"]
+
+[dependencies]
+ness-core = { path = "../../../core" }
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["console"] }
+slog = { version = "2.7", optional = true }
+console_error_panic_hook = "0.1"
+sha2 = "0.9"

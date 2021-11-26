@@ -8,13 +8,21 @@
         "noUncheckedIndexedAccess": true,
         "strict": true,
 
-        "baseUrl": "./src",
+        "moduleResolution": "node",
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+
+        "baseUrl": "./src/scripts",
         "module": "ES2020",
+        "types": [],
 
         "noEmitOnError": true,
 
         "forceConsistentCasingInFileNames": true,
 
         "target": "ES6",
+        "lib": ["ES6", "WebWorker"]
     },
+    "include": ["./*.ts"],
+    "exclude": [],
 }
