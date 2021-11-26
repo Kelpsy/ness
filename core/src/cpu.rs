@@ -24,6 +24,7 @@ pub struct Cpu {
     pub irqs: Irqs,
     pub math: Math,
     pub dmac: dma::Controller,
+    pub bus_timings: bus::Timings,
 }
 
 impl Cpu {
@@ -37,6 +38,7 @@ impl Cpu {
             irqs: Irqs::new(),
             math: Math::new(),
             dmac: dma::Controller::new(),
+            bus_timings: bus::Timings::new(),
         }
     }
 

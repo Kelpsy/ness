@@ -170,6 +170,7 @@ fn write_a_io<A: AccessType>(emu: &mut Emu, addr: u32, value: u8) {
         }
         0x20B => return emu.cpu.dmac.set_gp_requested(value, &mut emu.schedule),
         0x20C => return emu.cpu.dmac.set_h_enabled(value),
+        0x20D => return emu.cpu.bus_timings.set_fastrom_enabled(value & 1 != 0),
         0x300..=0x37F => {
             let channel = &mut emu.cpu.dmac.channels[(addr >> 4 & 7) as usize];
             match addr & 0xF {
@@ -427,7 +428,7 @@ pub fn read<A: AccessType>(emu: &mut Emu, addr: u32) -> u8 {
                 })
             }
 
-            // Internal CPU registers (TODO: some of them might be visible to DMA?)
+            // Internal CPU registers
             0x40..=0x43 => return update_mdr!(read_a_io::<A>(emu, addr)),
 
             // LoROM and other free areas used by carts
@@ -474,7 +475,7 @@ pub fn write<A: AccessType>(emu: &mut Emu, addr: u32, value: u8) {
             // Bus B I/O
             0x21 if !A::IS_DMA => return write_b_io::<A>(emu, addr as u8, value),
 
-            // Internal CPU registers (TODO: some of them might be visible to DMA?)
+            // Internal CPU registers
             0x40..=0x43 => return write_a_io::<A>(emu, addr, value),
 
             // LoROM and other free areas used by carts

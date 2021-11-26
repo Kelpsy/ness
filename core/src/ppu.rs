@@ -469,7 +469,7 @@ impl Ppu {
     }
 
     #[inline]
-    pub fn status78(&mut self) -> Status78 {
+    pub fn status78(&self) -> Status78 {
         self.status78
     }
 

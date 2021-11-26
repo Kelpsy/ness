@@ -6,14 +6,16 @@ pub fn add_io_cycles(emu: &mut Emu, cycles: u8) {
 }
 
 pub fn read_8(emu: &mut Emu, addr: u32) -> u8 {
+    let cycles = emu.cpu.bus_timings.get(addr);
     let result = bus::read::<bus::CpuAccess>(emu, addr);
-    emu.schedule.cur_time += 6; // TODO: Use real timings
+    emu.schedule.cur_time += cycles as Timestamp;
     result
 }
 
 pub fn write_8(emu: &mut Emu, addr: u32, value: u8) {
+    let cycles = emu.cpu.bus_timings.get(addr);
     bus::write::<bus::CpuAccess>(emu, addr, value);
-    emu.schedule.cur_time += 6; // TODO: Use real timings
+    emu.schedule.cur_time += cycles as Timestamp;
 }
 
 pub fn read_16(emu: &mut Emu, addr: u32) -> u16 {

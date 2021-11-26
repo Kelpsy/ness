@@ -14,7 +14,7 @@ use super::{
 use ness_core::{
     cart,
     ppu::{FB_HEIGHT, FB_WIDTH, VIEW_HEIGHT_NTSC, VIEW_WIDTH},
-    utils::{zeroed_box, BoxedByteSlice, ByteSlice},
+    utils::{zeroed_box, BoxedByteSlice},
 };
 use parking_lot::RwLock;
 use rfd::FileDialog;
@@ -156,7 +156,7 @@ impl UiState {
         };
 
         let (cart_info, cart_header, cart_info_source) = cart::info::Info::new(
-            ByteSlice::new(&rom[..]),
+            rom.as_byte_slice(),
             self.cart_db
                 .as_ref()
                 .map(|db| (db, <sha2::Sha256 as sha2::Digest>::digest(&rom[..]).into())),

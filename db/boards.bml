@@ -1,3 +1,6 @@
+// Database taken from Ares v121
+// https://ares.dev/
+
 database
   revision: 2020-06-07
 
@@ -969,4 +972,3 @@ board: ST-LOROM
       map address=40-5f,c0-df:0000-ffff mask=0x8000
     ram
       map address=70-7d,f0-ff:0000-ffff
-
