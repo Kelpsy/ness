@@ -7,7 +7,7 @@ publish = false
 [features]
 default = ["debug-views", "log", "discord-presence"]
 
-debug-views = ["fxhash", "bitflags", "ness-core/disasm"]
+debug-views = ["bitflags", "ness-core/disasm"]
 log = ["slog", "slog-term", "slog-async", "ness-core/log"]
 discord-presence = ["discord-rpc"]
 
@@ -16,7 +16,7 @@ compile-shaders = ["shaderc"]
 [dependencies]
 ness-core = { path = "../../core" }
 bitflags = { version = "1.3", optional = true }
-fxhash = { version = "0.2", optional = true }
+fxhash = "0.2"
 winit = { version = "0.25", features = ["serde"] }
 wgpu = { version = "0.11", features = ["spirv"] }
 futures-executor = "0.3"
