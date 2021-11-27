@@ -186,23 +186,10 @@ impl UiState {
             })
             .to_string();
 
-        let game_config = {
-            let mut config_path = self.config_home.join("games").join(&game_title);
-            config_path.set_extension("json");
-            let (config, save_config) =
-                Config::<config::Game>::read_from_file_or_show_dialog(&config_path, &game_title);
-            config.unwrap_or_else(move || {
-                if save_config {
-                    Config {
-                        contents: config::Game::default(),
-                        dirty: true,
-                        path: Some(config_path),
-                    }
-                } else {
-                    Config::default()
-                }
-            })
-        };
+        let game_config = Config::<config::Game>::read_from_file_or_show_dialog(
+            &self.config_home.join("games").join(&game_title),
+            &game_title,
+        );
 
         match config::launch_config(
             &self.global_config.contents,
@@ -397,21 +384,16 @@ pub fn main() {
         );
         Config::default()
     } else {
-        let path = config_home.join("global_config.json");
-        let (config, save) =
-            Config::<config::Global>::read_from_file_or_show_dialog(&path, "global_config.json");
-        config.unwrap_or_else(|| {
-            if save {
-                Config {
-                    contents: config::Global::default(),
-                    dirty: true,
-                    path: Some(path),
-                }
-            } else {
-                Config::default()
-            }
-        })
+        Config::<config::Global>::read_from_file_or_show_dialog(
+            &config_home.join("global_config.json"),
+            "global_config.json",
+        )
     };
+
+    let keymap = Config::<input::Keymap>::read_from_file_or_show_dialog(
+        &config_home.join("keymap.json"),
+        "keymap.json",
+    );
 
     macro_rules! read_db {
         ($config_field: ident, $name: literal) => {
@@ -510,7 +492,7 @@ pub fn main() {
         limit_framerate: config::RuntimeModifiable::global(global_config.contents.limit_framerate),
 
         screen_focused: true,
-        input: input::State::new(),
+        input: input::State::new(keymap),
         input_editor: None,
 
         audio_channel,
@@ -879,6 +861,7 @@ pub fn main() {
                 .global_config
                 .flush()
                 .expect("Couldn't save global configuration");
+            state.input.keymap.flush().expect("Couldn't save keymap");
         },
     );
 }

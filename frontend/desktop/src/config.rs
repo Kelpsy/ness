@@ -141,28 +141,28 @@ impl<T> Config<T> {
         }
     }
 
-    pub fn read_from_file_or_show_dialog(path: &Path, config_name: &str) -> (Option<Self>, bool)
+    pub fn read_from_file_or_show_dialog(path: &Path, config_name: &str) -> Self
     where
-        T: for<'de> Deserialize<'de>,
+        T: Default + for<'de> Deserialize<'de>,
     {
         let path_str = path.to_str().unwrap_or(config_name);
-        match Self::read_from_file(path.to_path_buf()) {
+        let (config, save) = match Self::read_from_file(path.to_path_buf()) {
             Ok(config) => (config, true),
-            Err(err) => match err {
-                Error::Io(err) => {
-                    config_error!(
-                        concat!(
-                            "Couldn't read `{}`: {}\n\nThe default values will be used, new ",
-                            "changes will not be saved.",
-                        ),
-                        path_str,
-                        err,
-                    );
-                    (None, false)
-                }
-                Error::Json(err) => (
-                    None,
-                    config_error!(
+            Err(err) => (
+                None,
+                match err {
+                    Error::Io(err) => {
+                        config_error!(
+                            concat!(
+                                "Couldn't read `{}`: {}\n\nThe default values will be used, new ",
+                                "changes will not be saved.",
+                            ),
+                            path_str,
+                            err,
+                        );
+                        false
+                    }
+                    Error::Json(err) => config_error!(
                         yes_no,
                         concat!(
                             "Couldn't parse `{}`: {}\n\nOverwrite the existing configuration file ",
@@ -171,9 +171,20 @@ impl<T> Config<T> {
                         path_str,
                         err,
                     ),
-                ),
-            },
-        }
+                },
+            ),
+        };
+        config.unwrap_or_else(|| {
+            if save {
+                Config {
+                    contents: T::default(),
+                    dirty: true,
+                    path: Some(path.to_path_buf()),
+                }
+            } else {
+                Config::default()
+            }
+        })
     }
 
     pub fn flush(&mut self) -> Result<(), Error>

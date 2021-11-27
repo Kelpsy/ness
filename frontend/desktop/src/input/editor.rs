@@ -1,11 +1,11 @@
-use super::{State as InputState, Trigger};
+use super::{trigger::Trigger, PressedKey, State as InputState};
 use imgui::{StyleColor, Ui, Window};
 use ness_core::controllers::joypad::Keys;
-use winit::event::{ElementState, Event, ScanCode, VirtualKeyCode, WindowEvent};
+use winit::event::{ElementState, Event, WindowEvent};
 
 pub struct Editor {
     current_key: Option<Keys>,
-    pressed_keys: Vec<(Option<VirtualKeyCode>, ScanCode)>,
+    pressed_keys: Vec<PressedKey>,
 }
 
 static KEYS: &[(Keys, &str)] = &[
@@ -49,7 +49,7 @@ impl Editor {
                         StyleColor::Button,
                         ui.style_color(StyleColor::ButtonActive),
                     ))
-                } else if input_state.keymap[&key].activated(&self.pressed_keys) {
+                } else if input_state.keymap.contents.0[&key].activated(&self.pressed_keys) {
                     Some(ui.push_style_color(
                         StyleColor::Button,
                         ui.style_color(StyleColor::ButtonHovered),
@@ -58,7 +58,7 @@ impl Editor {
                     None
                 };
 
-                if ui.button(&input_state.keymap[&key].to_string()) {
+                if ui.button(&input_state.keymap.contents.0[&key].to_string()) {
                     ui.set_keyboard_focus_here();
                     self.current_key = Some(key);
                 }
@@ -98,9 +98,11 @@ impl Editor {
                 if let Some(key_code) = input.virtual_keycode {
                     input_state
                         .keymap
+                        .contents
+                        .0
                         .insert(current_key, Trigger::KeyCode(key_code));
                 } else {
-                    input_state.keymap.remove(&current_key);
+                    input_state.keymap.contents.0.remove(&current_key);
                 }
             }
         }
