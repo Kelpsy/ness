@@ -84,6 +84,7 @@ struct UiState {
 
     screen_focused: bool,
     input: input::State,
+    input_editor: Option<input::Editor>,
 
     audio_channel: Option<audio::Channel>,
     sync_to_audio: config::RuntimeModifiable<bool>,
@@ -510,6 +511,7 @@ pub fn main() {
 
         screen_focused: true,
         input: input::State::new(),
+        input_editor: None,
 
         audio_channel,
         sync_to_audio: config::RuntimeModifiable::global(global_config.contents.sync_to_audio),
@@ -572,6 +574,9 @@ pub fn main() {
             }
 
             state.input.process_event(event, state.screen_focused);
+            if let Some(input_editor) = &mut state.input_editor {
+                input_editor.process_event(event, &mut state.input);
+            }
         },
         move |window, ui, state| {
             #[cfg(feature = "discord-presence")]
@@ -684,7 +689,9 @@ pub fn main() {
                                 state.load_from_rom_path(&path);
                             }
                         }
+                    });
 
+                    ui.menu("Config", || {
                         ui.menu_with_enabled("Audio volume", state.audio_channel.is_some(), || {
                             let output_stream =
                                 &mut state.audio_channel.as_mut().unwrap().output_stream;
@@ -742,6 +749,15 @@ pub fn main() {
                             state.global_config.dirty = true;
                             state.show_menu_bar = !state.global_config.contents.fullscreen_render;
                         }
+
+                        let mut show_input = state.input_editor.is_some();
+                        if imgui::MenuItem::new("Input").build_with_ref(ui, &mut show_input) {
+                            state.input_editor = if show_input {
+                                Some(input::Editor::new())
+                            } else {
+                                None
+                            };
+                        }
                     });
 
                     #[cfg(feature = "log")]
@@ -784,6 +800,14 @@ pub fn main() {
                     .expect("Couldn't send UI message");
             }
 
+            if let Some(input_editor) = &mut state.input_editor {
+                let mut opened = true;
+                input_editor.draw(ui, &mut state.input, &mut opened);
+                if !opened {
+                    state.input_editor = None;
+                }
+            }
+
             let window_size = window.window.inner_size();
             let aspect_ratio = VIEW_WIDTH as f32 / state.fb_view_height as f32;
             let uv1 = [
@@ -806,7 +830,8 @@ pub fn main() {
                     )
                     .uv_max(uv1)
                     .build();
-                state.screen_focused = !ui.is_any_item_focused();
+                state.screen_focused =
+                    !ui.is_window_focused_with_flags(imgui::WindowFocusedFlags::ANY_WINDOW);
             } else {
                 let style = ui.clone_style();
                 let window_padding = ui.push_style_var(imgui::StyleVar::WindowPadding([0.0; 2]));

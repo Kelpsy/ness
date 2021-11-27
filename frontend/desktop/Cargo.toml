@@ -17,7 +17,7 @@ compile-shaders = ["shaderc"]
 ness-core = { path = "../../core" }
 bitflags = { version = "1.3", optional = true }
 fxhash = { version = "0.2", optional = true }
-winit = "0.25"
+winit = { version = "0.25", features = ["serde"] }
 wgpu = { version = "0.11", features = ["spirv"] }
 futures-executor = "0.3"
 imgui = "0.8"
