@@ -88,6 +88,7 @@ struct UiState {
     input_editor: Option<input::Editor>,
 
     audio_channel: Option<audio::Channel>,
+    audio_sample_chunk_size: u32,
     sync_to_audio: config::RuntimeModifiable<bool>,
 
     #[cfg(feature = "log")]
@@ -495,6 +496,7 @@ pub fn main() {
         input_editor: None,
 
         audio_channel,
+        audio_sample_chunk_size: global_config.contents.audio_sample_chunk_size,
         sync_to_audio: config::RuntimeModifiable::global(global_config.contents.sync_to_audio),
 
         show_menu_bar: true,
@@ -688,6 +690,29 @@ pub fn main() {
                                 state.global_config.dirty = true;
                             }
                         });
+
+                        ui.menu_with_enabled(
+                            "Audio sample chunk size",
+                            state.audio_channel.is_some(),
+                            || {
+                                let mut sample_chunk_size = state.audio_sample_chunk_size as i32;
+                                if imgui::InputInt::new(ui, "", &mut sample_chunk_size)
+                                    .enter_returns_true(true)
+                                    .build()
+                                {
+                                    state.audio_sample_chunk_size = sample_chunk_size.max(0) as u32;
+                                    state
+                                        .message_tx
+                                        .send(emu::Message::UpdateAudioSampleChunkSize(
+                                            state.audio_sample_chunk_size,
+                                        ))
+                                        .expect("Couldn't send UI message");
+                                    state.global_config.contents.audio_sample_chunk_size =
+                                        state.audio_sample_chunk_size;
+                                    state.global_config.dirty = true;
+                                }
+                            },
+                        );
 
                         if imgui::MenuItem::new("Limit framerate")
                             .build_with_ref(ui, &mut state.limit_framerate.value)

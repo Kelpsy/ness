@@ -63,43 +63,47 @@ impl Sender {
 }
 
 impl ness_core::apu::dsp::Backend for Sender {
-    fn handle_sample_chunk(&mut self, samples: &[[Sample; 2]]) {
-        if self.sync {
-            // Wait until enough samples have been played
-            while self
-                .buffer
-                .read_pos
-                .load(Ordering::Relaxed)
-                .wrapping_sub(self.write_pos)
-                & BUFFER_MASK
-                <= samples.len()
-            {
-                spin_loop();
+    fn handle_sample_chunk(&mut self, samples: &mut Vec<[Sample; 2]>) {
+        while !samples.is_empty() {
+            let len = samples.len().min(BUFFER_CAPACITY >> 1);
+
+            if self.sync {
+                // Wait until enough samples have been played
+                while self
+                    .buffer
+                    .read_pos
+                    .load(Ordering::Relaxed)
+                    .wrapping_sub(self.write_pos)
+                    & BUFFER_MASK
+                    <= len
+                {
+                    spin_loop();
+                }
+            } else {
+                // Overwrite the oldest samples, attempt to move the read position to the start of the
+                // oldest remaining ones
+                let _ = self.buffer.read_pos.fetch_update(
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                    |read_pos| {
+                        if read_pos.wrapping_sub(self.write_pos) & BUFFER_MASK <= len {
+                            Some((self.write_pos + len + 1) & BUFFER_MASK)
+                        } else {
+                            None
+                        }
+                    },
+                );
             }
-        } else {
-            // Overwrite the oldest samples, attempt to move the read position to the start of the
-            // oldest remaining ones
-            let _ = self.buffer.read_pos.fetch_update(
-                Ordering::Relaxed,
-                Ordering::Relaxed,
-                |read_pos| {
-                    if read_pos.wrapping_sub(self.write_pos) & BUFFER_MASK <= samples.len() {
-                        Some((self.write_pos + samples.len() + 1) & BUFFER_MASK)
-                    } else {
-                        None
-                    }
-                },
-            );
-        }
-        for sample in samples {
-            unsafe {
-                *self.buffer.data.get_unchecked_mut(self.write_pos) = *sample;
+            for sample in samples.drain(..len) {
+                unsafe {
+                    *self.buffer.data.get_unchecked_mut(self.write_pos) = sample;
+                }
+                self.write_pos = (self.write_pos + 1) & BUFFER_MASK;
             }
-            self.write_pos = (self.write_pos + 1) & BUFFER_MASK;
+            self.buffer
+                .write_pos
+                .store(self.write_pos, Ordering::Release);
         }
-        self.buffer
-            .write_pos
-            .store(self.write_pos, Ordering::Release);
     }
 }
 

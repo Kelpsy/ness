@@ -10,13 +10,15 @@ use channel::{Channel, Index};
 pub type Sample = i16;
 
 pub trait Backend {
-    fn handle_sample_chunk(&mut self, samples: &[[Sample; 2]]);
+    fn handle_sample_chunk(&mut self, samples: &mut Vec<[Sample; 2]>);
 }
 
 pub struct DummyBackend;
 
 impl Backend for DummyBackend {
-    fn handle_sample_chunk(&mut self, _samples: &[[Sample; 2]]) {}
+    fn handle_sample_chunk(&mut self, samples: &mut Vec<[Sample; 2]>) {
+        samples.clear();
+    }
 }
 
 bitfield_debug! {
@@ -241,8 +243,7 @@ impl Dsp {
         if apu.dsp.sample_chunk.len() >= apu.dsp.sample_chunk_len {
             apu.dsp
                 .backend
-                .handle_sample_chunk(&apu.dsp.sample_chunk[..]);
-            apu.dsp.sample_chunk.clear();
+                .handle_sample_chunk(&mut apu.dsp.sample_chunk);
         }
     }
 }
