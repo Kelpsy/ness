@@ -28,7 +28,7 @@ serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 slog-term = { version = "2.8", optional = true }
 slog-async = { version = "2.6", optional = true }
-rfd = "0.5"
+rfd = "0.6"
 home = "0.5"
 sha2 = "0.9"
 parking_lot = "0.11"

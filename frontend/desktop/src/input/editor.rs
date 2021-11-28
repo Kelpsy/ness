@@ -3,6 +3,7 @@ use imgui::{StyleColor, Ui, Window};
 use ness_core::controllers::joypad::Keys;
 use winit::event::{ElementState, Event, WindowEvent};
 
+#[derive(Default)]
 pub struct Editor {
     current_key: Option<Keys>,
     pressed_keys: Vec<PressedKey>,
@@ -25,10 +26,7 @@ static KEYS: &[(Keys, &str)] = &[
 
 impl Editor {
     pub fn new() -> Self {
-        Editor {
-            current_key: None,
-            pressed_keys: Vec::new(),
-        }
+        Self::default()
     }
 
     pub fn draw(&mut self, ui: &Ui, input_state: &mut InputState, opened: &mut bool) {

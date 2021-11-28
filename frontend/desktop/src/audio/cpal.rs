@@ -22,7 +22,7 @@ impl OutputStream {
         let output_device = default_host().default_output_device()?;
         let supported_output_config = output_device
             .supported_output_configs()
-            .expect("Couldn't enumerate audio output device configs")
+            .ok()?
             .find(|config| config.channels() == 2)?
             .with_max_sample_rate();
 
@@ -59,7 +59,7 @@ impl OutputStream {
                 err_callback,
             ),
         }
-        .expect("Couldn't build audio output stream for default output device");
+        .ok()?;
         stream.play().expect("Couldn't start audio output stream");
 
         Some(OutputStream {
@@ -104,36 +104,32 @@ impl OutputData {
         let volume = f32::from_bits(self.volume.load(Ordering::Relaxed));
 
         let max_input_samples = (((data.len()) >> 1) as f64 * self.ratio + fract).ceil() as usize;
+
+        macro_rules! push_output_samples {
+            () => {
+                while fract < 1.0 {
+                    if output_i >= data.len() {
+                        self.fract = fract;
+                        return;
+                    }
+                    let result = self.interp.get_output_sample(fract);
+                    data[output_i] = T::from(&(result[0] as f32 * volume));
+                    data[output_i + 1] = T::from(&(result[1] as f32 * volume));
+                    fract += self.ratio;
+                    output_i += 2;
+                }
+                fract -= 1.0;
+            };
+        }
+
         for input_sample in iter::from_fn(|| self.rx.read_sample()).take(max_input_samples) {
             self.interp.push_input_sample(input_sample);
-            while fract < 1.0 {
-                if output_i >= data.len() {
-                    self.fract = fract;
-                    return;
-                }
-                let result = self.interp.get_output_sample(fract);
-                data[output_i] = T::from(&(result[0] as f32 * volume));
-                data[output_i + 1] = T::from(&(result[1] as f32 * volume));
-                fract += self.ratio;
-                output_i += 2;
-            }
-            fract -= 1.0;
+            push_output_samples!();
         }
 
         loop {
             self.interp.copy_last_input_sample();
-            while fract < 1.0 {
-                if output_i >= data.len() {
-                    self.fract = fract;
-                    return;
-                }
-                let result = self.interp.get_output_sample(fract);
-                data[output_i] = T::from(&(result[0] as f32 * volume));
-                data[output_i + 1] = T::from(&(result[1] as f32 * volume));
-                fract += self.ratio;
-                output_i += 2;
-            }
-            fract -= 1.0;
+            push_output_samples!();
         }
     }
 }

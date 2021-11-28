@@ -9,7 +9,9 @@ use super::debug_views;
 use super::{
     audio,
     config::{self, Config, LaunchConfig, LoggingKind},
-    emu, input, triple_buffer, utils, FrameData,
+    emu, input, triple_buffer,
+    utils::{config_base, scale_to_fit},
+    FrameData,
 };
 use ness_core::{
     cart,
@@ -25,7 +27,7 @@ use std::{
     fs::{self, File},
     io::{self, Read, Seek, SeekFrom},
     num::NonZeroU32,
-    path::{Path, PathBuf},
+    path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -55,7 +57,7 @@ fn init_logging(
             *imgui_log = None;
             let decorator = slog_term::TermDecorator::new().stdout().build();
             let drain = slog_term::CompactFormat::new(decorator)
-                .use_custom_timestamp(|_: &mut dyn std::io::Write| Ok(()))
+                .use_custom_timestamp(|_: &mut dyn io::Write| Ok(()))
                 .build()
                 .fuse();
             slog::Logger::root(
@@ -71,10 +73,9 @@ fn init_logging(
 }
 
 struct UiState {
-    config_home: PathBuf,
     global_config: Config<config::Global>,
-    game_config: Option<Config<config::Game>>,
     game_title: Option<String>,
+    game_config: Option<Config<config::Game>>,
     cart_db: Option<cart::info::db::Db>,
 
     playing: bool,
@@ -127,8 +128,6 @@ impl UiState {
     }
 
     fn load_from_rom_path(&mut self, path: &Path) {
-        use core::fmt::Write;
-
         if let Some(extension) = path.extension().and_then(|s| s.to_str()) {
             if !ALLOWED_ROM_EXTENSIONS.contains(&extension) {
                 return;
@@ -187,7 +186,7 @@ impl UiState {
             .to_string();
 
         let game_config = Config::<config::Game>::read_from_file_or_show_dialog(
-            &self.config_home.join("games").join(&game_title),
+            &config_base().join("games").join(&game_title),
             &game_title,
         );
 
@@ -204,6 +203,7 @@ impl UiState {
                 config_error!(
                     "Couldn't determine final configuration for game: {}",
                     errors.into_iter().fold(String::new(), |mut acc, err| {
+                        use core::fmt::Write;
                         let _ = write!(acc, "\n- {}", err);
                         acc
                     })
@@ -235,7 +235,14 @@ impl UiState {
         self.game_title = Some(game_title);
         self.game_config = Some(game_config);
 
+        self.limit_framerate = config.limit_framerate;
         self.sync_to_audio = config.sync_to_audio;
+
+        if let Some(channel) = &mut self.audio_channel {
+            channel
+                .output_stream
+                .set_interp(config.audio_interp_method.value.create_interp());
+        }
 
         let ram = if let Some(path) = config.cur_save_path.as_deref() {
             match File::open(&path) {
@@ -273,8 +280,6 @@ impl UiState {
             );
             return;
         };
-
-        self.limit_framerate = config.limit_framerate;
 
         #[cfg(feature = "log")]
         let logger = self.logger.clone();
@@ -363,14 +368,9 @@ fn clear_fb_texture(id: imgui::TextureId, window: &mut window::Window) {
 }
 
 pub fn main() {
-    let config_home = match env::var_os("XDG_CONFIG_HOME") {
-        Some(config_dir) => Path::new(&config_dir).join("ness"),
-        None => home::home_dir()
-            .map(|home| home.join(".config/ness"))
-            .unwrap_or_else(|| PathBuf::from("/.config/ness")),
-    };
+    let config_home = config_base();
 
-    let global_config = if let Err(err) = fs::create_dir_all(&config_home) {
+    let global_config = if let Err(err) = fs::create_dir_all(config_home) {
         config_error!(
             concat!(
                 "Couldn't create the configuration directory{}: {}\n\nThe default configuration ",
@@ -483,9 +483,8 @@ pub fn main() {
     clear_fb_texture(fb_texture_id, &mut window_builder.window);
 
     let mut state = UiState {
-        config_home,
-        game_config: None,
         game_title: None,
+        game_config: None,
         cart_db,
 
         playing: false,
@@ -619,6 +618,7 @@ pub fn main() {
 
             if state.global_config.contents.fullscreen_render
                 && ui.is_key_pressed(imgui::Key::Escape)
+                && !ui.is_any_item_focused()
             {
                 state.show_menu_bar = !state.show_menu_bar;
             }
@@ -797,7 +797,7 @@ pub fn main() {
                 state.fb_height as f32 / FB_HEIGHT as f32,
             ];
             if state.global_config.contents.fullscreen_render {
-                let ([x_base, y_base], [width, height]) = utils::scale_to_fit(
+                let ([x_base, y_base], [width, height]) = scale_to_fit(
                     aspect_ratio,
                     [
                         (window_size.width as f64 / window.scale_factor) as f32,
@@ -816,7 +816,7 @@ pub fn main() {
                     !ui.is_window_focused_with_flags(imgui::WindowFocusedFlags::ANY_WINDOW);
             } else {
                 let style = ui.clone_style();
-                let window_padding = ui.push_style_var(imgui::StyleVar::WindowPadding([0.0; 2]));
+                let _window_padding = ui.push_style_var(imgui::StyleVar::WindowPadding([0.0; 2]));
                 let titlebar_height = style.frame_padding[1] * 2.0 + ui.current_font_size();
                 const DEFAULT_SCALE: f32 = 2.0;
                 imgui::Window::new("Screen")
@@ -837,14 +837,13 @@ pub fn main() {
                     .position_pivot([0.5; 2])
                     .build(ui, || {
                         let ([x_base, y_base], [width, height]) =
-                            utils::scale_to_fit(aspect_ratio, ui.content_region_avail());
+                            scale_to_fit(aspect_ratio, ui.content_region_avail());
                         ui.set_cursor_pos([x_base, titlebar_height + y_base]);
                         imgui::Image::new(state.fb_texture_id, [width, height])
                             .uv1(uv1)
                             .build(ui);
                         state.screen_focused = ui.is_window_focused();
                     });
-                drop(window_padding);
             }
 
             window::ControlFlow::Continue

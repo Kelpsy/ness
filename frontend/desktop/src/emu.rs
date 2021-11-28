@@ -66,9 +66,6 @@ pub(super) fn main(
     let mut cur_save_path = config.cur_save_path;
     let mut last_save_flush_time = last_frame_time;
 
-    #[cfg(feature = "debug-views")]
-    let mut debug_views = debug_views::EmuState::new();
-
     macro_rules! save {
         ($save_path: expr) => {
             if emu.cart.ram_modified()
@@ -82,6 +79,9 @@ pub(super) fn main(
             }
         };
     }
+
+    #[cfg(feature = "debug-views")]
+    let mut debug_views = debug_views::EmuState::new();
 
     'outer: loop {
         for message in message_rx.try_iter() {

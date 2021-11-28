@@ -1,4 +1,4 @@
-#![feature(step_trait, once_cell, hash_drain_filter, new_uninit)]
+#![feature(step_trait, once_cell, hash_drain_filter, new_uninit, slice_ptr_get)]
 
 #[macro_use]
 mod utils;

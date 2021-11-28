@@ -39,6 +39,7 @@ pub struct Global {
     pub audio_interp_method: audio::InterpMethod,
     pub pause_on_launch: bool,
     pub autosave_interval_ms: f32,
+
     pub save_dir_path: PathBuf,
 
     pub audio_volume: f32,
@@ -62,6 +63,7 @@ impl Default for Global {
             audio_interp_method: audio::InterpMethod::Nearest,
             pause_on_launch: false,
             autosave_interval_ms: 1000.0,
+
             save_dir_path: data_base.join("saves"),
 
             audio_volume: 1.0,
@@ -85,6 +87,7 @@ pub struct Game {
     pub audio_interp_method: Option<audio::InterpMethod>,
     pub pause_on_launch: Option<bool>,
     pub autosave_interval_ms: Option<f32>,
+
     pub save_path: Option<SavePathConfig>,
 }
 
@@ -97,6 +100,7 @@ impl Default for Game {
             audio_interp_method: None,
             pause_on_launch: None,
             autosave_interval_ms: None,
+
             save_path: Some(SavePathConfig::GlobalSingle),
         }
     }
@@ -229,8 +233,8 @@ pub struct LaunchConfig {
     pub audio_interp_method: RuntimeModifiable<audio::InterpMethod>,
     pub pause_on_launch: bool,
     pub autosave_interval_ms: RuntimeModifiable<f32>,
-    pub cur_save_path: Option<PathBuf>,
     pub audio_sample_chunk_size: u32,
+    pub cur_save_path: Option<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -340,7 +344,7 @@ pub fn launch_config(
         audio_interp_method,
         pause_on_launch,
         autosave_interval_ms,
-        cur_save_path,
         audio_sample_chunk_size: global_config.audio_sample_chunk_size,
+        cur_save_path,
     })
 }

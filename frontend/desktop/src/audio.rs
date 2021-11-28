@@ -4,7 +4,6 @@ mod interp;
 pub use interp::{Interp, InterpMethod};
 
 use core::{
-    cell::UnsafeCell,
     hint::spin_loop,
     sync::atomic::{AtomicUsize, Ordering},
 };
@@ -20,9 +19,10 @@ const BUFFER_MASK: usize = BUFFER_CAPACITY - 1;
 struct Buffer {
     read_pos: AtomicUsize,
     write_pos: AtomicUsize,
-    data: UnsafeCell<Box<[[Sample; 2]]>>,
+    data: *mut [[Sample; 2]],
 }
 
+unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
 
 impl Buffer {
@@ -30,8 +30,14 @@ impl Buffer {
         Arc::new(Buffer {
             read_pos: AtomicUsize::new(0),
             write_pos: AtomicUsize::new(0),
-            data: UnsafeCell::new(unsafe { Box::new_zeroed_slice(BUFFER_CAPACITY).assume_init() }),
+            data: Box::into_raw(unsafe { Box::new_zeroed_slice(BUFFER_CAPACITY).assume_init() }),
         })
+    }
+}
+
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        drop(unsafe { Box::from_raw(self.data) })
     }
 }
 
@@ -87,7 +93,7 @@ impl ness_core::apu::dsp::Backend for Sender {
         }
         for sample in samples {
             unsafe {
-                *(&mut *self.buffer.data.get()).get_unchecked_mut(self.write_pos) = *sample;
+                *self.buffer.data.get_unchecked_mut(self.write_pos) = *sample;
             }
             self.write_pos = (self.write_pos + 1) & BUFFER_MASK;
         }
@@ -115,7 +121,7 @@ impl Receiver {
                     }
                 })
         {
-            let result = unsafe { (&mut *self.buffer.data.get()).get_unchecked_mut(read_pos) };
+            let result = unsafe { &*self.buffer.data.get_unchecked_mut(read_pos) };
             Some([
                 result[0] as f64 * (1.0 / 32768.0),
                 result[1] as f64 * (1.0 / 32768.0),
