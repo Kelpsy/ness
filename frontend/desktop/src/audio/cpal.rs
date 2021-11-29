@@ -101,7 +101,8 @@ impl OutputData {
 
         let mut fract = self.fract;
         let mut output_i = 0;
-        let volume = f32::from_bits(self.volume.load(Ordering::Relaxed));
+        let mut volume = f32::from_bits(self.volume.load(Ordering::Relaxed));
+        volume *= volume;
 
         let max_input_samples = (((data.len()) >> 1) as f64 * self.ratio + fract).ceil() as usize;
 
