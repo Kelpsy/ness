@@ -844,6 +844,7 @@ pub fn main() {
                 let _window_padding = ui.push_style_var(imgui::StyleVar::WindowPadding([0.0; 2]));
                 let titlebar_height = style.frame_padding[1] * 2.0 + ui.current_font_size();
                 const DEFAULT_SCALE: f32 = 2.0;
+                state.screen_focused = false;
                 imgui::Window::new("Screen")
                     .size(
                         [
