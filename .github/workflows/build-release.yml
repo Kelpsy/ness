@@ -8,6 +8,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   DEBUG_FEATURES: log,debug-views
+  MACOSX_DEPLOYMENT_TARGET: 10.11
 
 jobs:
   build:
@@ -30,7 +31,7 @@ jobs:
     - name: Install nightly toolchain
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: nightly-2021-11-21
+        toolchain: nightly
         override: true
         components: clippy
     
