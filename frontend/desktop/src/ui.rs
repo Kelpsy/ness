@@ -88,7 +88,9 @@ struct UiState {
     input_editor: Option<input::Editor>,
 
     audio_channel: Option<audio::Channel>,
+    audio_volume: f32,
     audio_sample_chunk_size: u32,
+    audio_interp_method: audio::InterpMethod,
     sync_to_audio: config::RuntimeModifiable<bool>,
 
     #[cfg(feature = "log")]
@@ -496,7 +498,9 @@ pub fn main() {
         input_editor: None,
 
         audio_channel,
+        audio_volume: global_config.contents.audio_volume,
         audio_sample_chunk_size: global_config.contents.audio_sample_chunk_size,
+        audio_interp_method: global_config.contents.audio_interp_method,
         sync_to_audio: config::RuntimeModifiable::global(global_config.contents.sync_to_audio),
 
         show_menu_bar: true,
@@ -676,43 +680,68 @@ pub fn main() {
                     });
 
                     ui.menu("Config", || {
-                        ui.menu_with_enabled("Audio volume", state.audio_channel.is_some(), || {
-                            let output_stream =
-                                &mut state.audio_channel.as_mut().unwrap().output_stream;
-                            let mut volume = output_stream.volume() * 100.0;
+                        ui.menu("Audio volume", || {
+                            let mut volume = state.audio_volume * 100.0;
                             if imgui::Slider::new("", 0.0, 100.0)
                                 .display_format("%.02f%%")
                                 .build(ui, &mut volume)
                             {
-                                volume = (volume * 100.0).round().clamp(0.0, 10000.0) / 10000.0;
-                                output_stream.set_volume(volume);
-                                state.global_config.contents.audio_volume = volume;
+                                state.audio_volume =
+                                    (volume * 100.0).round().clamp(0.0, 10000.0) / 10000.0;
+                                if let Some(audio_channel) = state.audio_channel.as_mut() {
+                                    audio_channel.output_stream.set_volume(state.audio_volume)
+                                }
+                                state.global_config.contents.audio_volume = state.audio_volume;
                                 state.global_config.dirty = true;
                             }
                         });
 
-                        ui.menu_with_enabled(
-                            "Audio sample chunk size",
-                            state.audio_channel.is_some(),
-                            || {
-                                let mut sample_chunk_size = state.audio_sample_chunk_size as i32;
-                                if imgui::InputInt::new(ui, "", &mut sample_chunk_size)
-                                    .enter_returns_true(true)
-                                    .build()
-                                {
-                                    state.audio_sample_chunk_size = sample_chunk_size.max(0) as u32;
-                                    state
-                                        .message_tx
-                                        .send(emu::Message::UpdateAudioSampleChunkSize(
-                                            state.audio_sample_chunk_size,
-                                        ))
-                                        .expect("Couldn't send UI message");
-                                    state.global_config.contents.audio_sample_chunk_size =
-                                        state.audio_sample_chunk_size;
-                                    state.global_config.dirty = true;
+                        ui.menu("Audio sample chunk size", || {
+                            let mut sample_chunk_size = state.audio_sample_chunk_size as i32;
+                            if imgui::InputInt::new(ui, "", &mut sample_chunk_size)
+                                .enter_returns_true(true)
+                                .build()
+                            {
+                                state.audio_sample_chunk_size = sample_chunk_size.max(0) as u32;
+                                state
+                                    .message_tx
+                                    .send(emu::Message::UpdateAudioSampleChunkSize(
+                                        state.audio_sample_chunk_size,
+                                    ))
+                                    .expect("Couldn't send UI message");
+                                state.global_config.contents.audio_sample_chunk_size =
+                                    state.audio_sample_chunk_size;
+                                state.global_config.dirty = true;
+                            }
+                        });
+
+                        ui.menu("Audio interpolation method", || {
+                            static AUDIO_INTERP_METHODS: [audio::InterpMethod; 2] =
+                                [audio::InterpMethod::Nearest, audio::InterpMethod::Cubic];
+                            let mut i = AUDIO_INTERP_METHODS
+                                .iter()
+                                .position(|&m| m == state.audio_interp_method)
+                                .unwrap();
+                            let updated =
+                                ui.combo("", &mut i, &AUDIO_INTERP_METHODS, |interp_method| {
+                                    match interp_method {
+                                        audio::InterpMethod::Nearest => "Nearest",
+                                        audio::InterpMethod::Cubic => "Cubic",
+                                    }
+                                    .into()
+                                });
+                            if updated {
+                                state.audio_interp_method = AUDIO_INTERP_METHODS[i];
+                                if let Some(audio_channel) = state.audio_channel.as_mut() {
+                                    audio_channel
+                                        .output_stream
+                                        .set_interp(state.audio_interp_method.create_interp());
                                 }
-                            },
-                        );
+                                state.global_config.contents.audio_interp_method =
+                                    state.audio_interp_method;
+                                state.global_config.dirty = true;
+                            }
+                        });
 
                         if imgui::MenuItem::new("Limit framerate")
                             .build_with_ref(ui, &mut state.limit_framerate.value)

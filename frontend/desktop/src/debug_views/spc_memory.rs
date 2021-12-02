@@ -36,7 +36,7 @@ impl View for SpcMemory {
             last_visible_addrs: (0, 0).into(),
             mem_contents: MemContents {
                 visible_addrs: (0, 0).into(),
-                data: vec![0],
+                data: Vec::new(),
             },
         }
     }
@@ -96,9 +96,10 @@ impl View for SpcMemory {
         self.editor.handle_options_right_click(ui);
         self.editor.draw_callbacks(ui, None, &mut (), |_, addr| {
             if self.mem_contents.visible_addrs.contains(&addr) {
-                Some(
-                    self.mem_contents.data[(addr - self.mem_contents.visible_addrs.start) as usize],
-                )
+                self.mem_contents
+                    .data
+                    .get((addr - self.mem_contents.visible_addrs.start) as usize)
+                    .copied()
             } else {
                 None
             }

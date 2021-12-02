@@ -75,10 +75,6 @@ impl OutputStream {
             .expect("Couldn't send new interpolator to audio thread");
     }
 
-    pub fn volume(&mut self) -> f32 {
-        f32::from_bits(self.volume.load(Ordering::Relaxed))
-    }
-
     pub fn set_volume(&mut self, volume: f32) {
         self.volume.store(volume.to_bits(), Ordering::Relaxed);
     }
