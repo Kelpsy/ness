@@ -1,7 +1,9 @@
 mod range_inclusive;
 pub use range_inclusive::RangeInclusive;
+mod scrollbar;
+use scrollbar::Scrollbar;
 mod y_pos;
-use y_pos::{SignedYPos, YPos};
+use y_pos::{SignedYPos, YPos, YPosRaw};
 
 use core::{fmt::Write, num::NonZeroU8};
 use imgui::{
@@ -34,37 +36,21 @@ bitflags::bitflags! {
 
 pub type Addr = u64;
 pub type WAddr = u128;
-pub type YPosRaw = u128;
-pub type SignedYPosRaw = i128;
-
-macro_rules! str_buf {
-    ($buf: expr, $($args: tt)*) => {{
-        $buf.clear();
-        write!($buf, $($args)*).unwrap();
-        &$buf
-    }};
-}
 
 pub struct MemoryEditor {
     cols: NonZeroU8,
     col_size: NonZeroU8,
+    bytes_per_row: Addr,
     addr_digits: Option<NonZeroU8>,
     flags: Flags,
     addr_range: RangeInclusive<Addr>,
 
-    data_scroll: YPos,
+    scrollbar: Scrollbar,
     visible_data_rows: RangeInclusive<Addr>,
-    // A second copy is needed in addition to the one in `layout` as `visible_data_rows` can be one
-    // frame late, or `layout` might be `None`
-    visible_bytes_per_row: Addr,
 
     selected_addr: Addr,
     addr_input: String,
     selected_addr_changed: bool,
-
-    grabbing_scrollbar: bool,
-    grab_start_y: f32,
-    grab_start_scroll: YPos,
 
     str_buffer: String,
     layout: Option<Layout>,
@@ -76,6 +62,7 @@ impl MemoryEditor {
         MemoryEditor {
             cols: NonZeroU8::new(16).unwrap(),
             col_size: NonZeroU8::new(1).unwrap(),
+            bytes_per_row: 16,
             addr_digits: None,
             flags: Flags::SHOW_VIEW_OPTIONS
                 | Flags::SHOW_RANGE
@@ -85,17 +72,12 @@ impl MemoryEditor {
                 | Flags::SHOW_ASCII,
             addr_range: (0, 0).into(),
 
-            data_scroll: YPos(0),
+            scrollbar: Scrollbar::new(),
             visible_data_rows: (0, 0).into(),
-            visible_bytes_per_row: 16,
 
             selected_addr: 0,
             addr_input: String::new(),
             selected_addr_changed: true,
-
-            grabbing_scrollbar: false,
-            grab_start_y: 0.0,
-            grab_start_scroll: YPos(0),
 
             str_buffer: String::new(),
             layout: None,
@@ -103,8 +85,14 @@ impl MemoryEditor {
     }
 
     #[inline]
+    pub fn calc_bytes_per_row(&self) -> Addr {
+        self.cols.get() as Addr * self.col_size.get() as Addr
+    }
+
+    #[inline]
     pub fn cols(mut self, cols: NonZeroU8) -> Self {
         self.cols = cols;
+        self.bytes_per_row = self.calc_bytes_per_row();
         self.layout = None;
         self
     }
@@ -112,6 +100,7 @@ impl MemoryEditor {
     #[inline]
     pub fn col_size(mut self, col_size: NonZeroU8) -> Self {
         self.col_size = col_size;
+        self.bytes_per_row = self.calc_bytes_per_row();
         self.layout = None;
         self
     }
@@ -192,6 +181,7 @@ impl MemoryEditor {
     #[inline]
     pub fn addr_range(mut self, addr_range: RangeInclusive<Addr>) -> Self {
         self.addr_range = addr_range;
+        self.selected_addr = self.selected_addr.clamp(addr_range.start, addr_range.end);
         self.layout = None;
         self
     }
@@ -200,7 +190,6 @@ impl MemoryEditor {
 #[derive(Clone)]
 struct Layout {
     data_row_height: f32,
-    data_row_spacing: f32,
     data_row_height_with_spacing_int: YPos,
     data_row_height_with_spacing: f32,
 
@@ -211,7 +200,6 @@ struct Layout {
     ascii_col_width_with_spacing: f32,
 
     addr_digits: NonZeroU8,
-    data_addr_width: f32,
 
     hex_start_win_x: f32,
     hex_end_win_x: f32,
@@ -227,30 +215,34 @@ struct Layout {
     win_width: f32,
     footer_height: f32,
 
-    bytes_per_row: Addr,
     total_rows: WAddr,
     data_height_int: YPos,
 }
 
+macro_rules! str_buf {
+    ($buf: expr, $($args: tt)*) => {{
+        use core::fmt::Write;
+        $buf.clear();
+        write!($buf, $($args)*).unwrap();
+        &$buf
+    }};
+}
+
 impl MemoryEditor {
     #[inline]
-    pub fn bytes_per_row(&self) -> Addr {
-        self.cols.get() as Addr * self.col_size.get() as Addr
-    }
-
-    #[inline]
-    pub fn visible_addrs(&self, context_lines: Addr) -> RangeInclusive<Addr> {
+    pub fn visible_addrs(&self, context_rows: Addr) -> RangeInclusive<Addr> {
         (
             self.addr_range.start
-                + self.visible_data_rows.start.saturating_sub(context_lines)
-                    * self.visible_bytes_per_row,
+                + self.visible_data_rows.start.saturating_sub(context_rows) * self.bytes_per_row,
             self.addr_range
                 .start
                 .saturating_add(
                     self.visible_data_rows
                         .end
-                        .saturating_add(context_lines)
-                        .saturating_mul(self.visible_bytes_per_row),
+                        .saturating_add(context_rows)
+                        .saturating_mul(self.bytes_per_row)
+                        + self.bytes_per_row
+                        - 1,
                 )
                 .min(self.addr_range.end),
         )
@@ -266,7 +258,6 @@ impl MemoryEditor {
         let data_row_height_with_spacing_int: YPos =
             (data_row_height + style.item_spacing[1]).into();
         let data_row_height_with_spacing = data_row_height_with_spacing_int.into();
-        let data_row_spacing = data_row_height_with_spacing - data_row_height;
 
         let glyph_width = ui.calc_text_size("0")[0];
         let hex_byte_width = glyph_width * 2.0;
@@ -360,14 +351,12 @@ impl MemoryEditor {
         };
         footer_height += line_height;
 
-        let bytes_per_row = self.bytes_per_row();
-        let total_rows =
-            ((self.addr_range.end - self.addr_range.start) as WAddr + 1) / bytes_per_row as WAddr;
+        let total_rows = ((self.addr_range.end - self.addr_range.start) as WAddr + 1)
+            / self.bytes_per_row as WAddr;
         let data_height_int = data_row_height_with_spacing_int * total_rows as YPosRaw;
 
         self.layout = Some(Layout {
             data_row_height,
-            data_row_spacing,
             data_row_height_with_spacing_int,
             data_row_height_with_spacing,
 
@@ -378,7 +367,6 @@ impl MemoryEditor {
             ascii_col_width_with_spacing,
 
             addr_digits,
-            data_addr_width,
 
             hex_start_win_x,
             hex_end_win_x,
@@ -394,7 +382,6 @@ impl MemoryEditor {
             win_width,
             footer_height,
 
-            bytes_per_row,
             total_rows,
             data_height_int,
         });
@@ -414,20 +401,25 @@ impl MemoryEditor {
         let layout = self.layout.as_ref().unwrap();
         let content_height = ui.window_size()[1];
 
-        let selected_row = self.selected_addr / layout.bytes_per_row;
+        let selected_row = self.selected_addr / self.bytes_per_row;
         let selection_start_scroll =
             layout.data_row_height_with_spacing_int * selected_row as YPosRaw;
 
-        if self.data_scroll >= selection_start_scroll {
-            self.data_scroll = selection_start_scroll;
+        if self.scrollbar.scroll >= selection_start_scroll {
+            self.scrollbar.scroll = selection_start_scroll;
         } else {
             let selection_end_scroll_minus_content_height = (selection_start_scroll
                 + layout.data_row_height_with_spacing_int)
                 .saturating_sub(content_height.into());
-            if self.data_scroll <= selection_end_scroll_minus_content_height {
-                self.data_scroll = selection_end_scroll_minus_content_height;
+            if self.scrollbar.scroll <= selection_end_scroll_minus_content_height {
+                self.scrollbar.scroll = selection_end_scroll_minus_content_height;
             }
         }
+    }
+
+    pub fn set_selected_addr(&mut self, addr: Addr) {
+        self.selected_addr = addr.clamp(self.addr_range.start, self.addr_range.end);
+        self.selected_addr_changed = true;
     }
 
     #[inline]
@@ -464,9 +456,9 @@ impl MemoryEditor {
         // mut write: impl FnMut(&mut T, Addr, u8),
     ) {
         self.compute_layout(ui, &ui.clone_style());
-        let layout = self.layout.as_ref().unwrap();
 
         let window_token = if let Some(window_title) = window_title {
+            let layout = self.layout.as_ref().unwrap();
             let token = if let Some(token) = Window::new(window_title)
                 .size_constraints([layout.win_width, -1.0], [layout.win_width, -1.0])
                 .begin(ui)
@@ -502,46 +494,36 @@ impl MemoryEditor {
                 let win_height_int = YPos::from(ui.window_size()[1]);
                 let scroll_max_int = layout.data_height_int - win_height_int;
 
-                self.data_scroll = if ui.is_window_hovered() {
-                    self.data_scroll.as_signed()
+                self.scrollbar.scroll = if ui.is_window_hovered() {
+                    self.scrollbar.scroll.as_signed()
                         - SignedYPos::from(ui.io().mouse_wheel * 3.0)
                             * layout.data_row_height_with_spacing_int.as_signed()
                 } else {
-                    self.data_scroll.as_signed()
+                    self.scrollbar.scroll.as_signed()
                 }
                 .min(scroll_max_int.as_signed())
                 .max(SignedYPos(0))
                 .as_unsigned();
 
                 {
-                    let prev_addr = self.selected_addr;
-                    self.selected_addr = self
-                        .selected_addr
-                        .clamp(self.addr_range.start, self.addr_range.end);
+                    let mut new_addr = None;
                     if ui.is_window_focused() {
                         if ui.is_key_pressed(Key::UpArrow) {
-                            self.selected_addr =
-                                self.selected_addr.saturating_sub(layout.bytes_per_row);
+                            new_addr = Some(self.selected_addr.saturating_sub(self.bytes_per_row));
                         }
                         if ui.is_key_pressed(Key::DownArrow) {
-                            self.selected_addr =
-                                self.selected_addr.saturating_add(layout.bytes_per_row);
+                            new_addr = Some(self.selected_addr.saturating_add(self.bytes_per_row));
                         }
                         if ui.is_key_pressed(Key::LeftArrow) {
-                            self.selected_addr = self.selected_addr.saturating_sub(1);
+                            new_addr = Some(self.selected_addr.saturating_sub(1));
                         }
                         if ui.is_key_pressed(Key::RightArrow) {
-                            self.selected_addr = self.selected_addr.saturating_add(1);
+                            new_addr = Some(self.selected_addr.saturating_add(1));
                         }
                     }
-                    self.selected_addr = self
-                        .selected_addr
-                        .clamp(self.addr_range.start, self.addr_range.end);
-                    self.selected_addr_changed |= self.selected_addr != prev_addr;
-                };
-
-                if self.selected_addr_changed {
-                    self.focus_on_selected_addr(ui);
+                    if let Some(new_addr) = new_addr {
+                        self.set_selected_addr(new_addr);
+                    }
                 }
 
                 let layout = self.layout.as_ref().unwrap();
@@ -554,17 +536,18 @@ impl MemoryEditor {
 
                 if ui.is_window_hovered() && ui.is_mouse_clicked(MouseButton::Left) {
                     let scroll_offset_y =
-                        f32::from(self.data_scroll % layout.data_row_height_with_spacing_int);
+                        f32::from(self.scrollbar.scroll % layout.data_row_height_with_spacing_int);
                     let hex_end_screen_x = layout.hex_end_win_x + win_pos[0];
                     let ascii_end_screen_x = layout.ascii_end_scrollbar_start_win_x + win_pos[0];
                     let row_base = (((mouse_pos[1] - win_pos[1] + scroll_offset_y)
                         / layout.data_row_height_with_spacing)
                         as WAddr
                         + self
-                            .data_scroll
+                            .scrollbar
+                            .scroll
                             .div_into_int(layout.data_row_height_with_spacing_int)
                             as WAddr)
-                        * layout.bytes_per_row as WAddr;
+                        * self.bytes_per_row as WAddr;
                     if (hex_start_screen_x..hex_end_screen_x).contains(&mouse_pos[0]) {
                         let rel_x = mouse_pos[0] - hex_start_screen_x;
                         let col = ((rel_x + layout.item_spacing_x * 0.5)
@@ -574,11 +557,11 @@ impl MemoryEditor {
                             / layout.hex_byte_width)
                             .clamp(0.0, (self.col_size.get() - 1) as f32)
                             as WAddr;
-                        self.selected_addr =
+                        self.set_selected_addr(
                             (row_base + col * self.col_size.get() as WAddr + col_byte)
                                 .min(self.addr_range.end as WAddr)
-                                as Addr;
-                        self.selected_addr_changed = true;
+                                as Addr,
+                        );
                     } else if (ascii_start_screen_x..ascii_end_screen_x).contains(&mouse_pos[0]) {
                         let rel_x = mouse_pos[0] - ascii_start_screen_x;
                         let col = ((rel_x + layout.item_spacing_x * 0.5)
@@ -588,92 +571,30 @@ impl MemoryEditor {
                             / layout.glyph_width)
                             .clamp(0.0, (self.col_size.get() - 1) as f32)
                             as WAddr;
-                        self.selected_addr =
+                        self.set_selected_addr(
                             (row_base + col * self.col_size.get() as WAddr + col_byte)
                                 .min(self.addr_range.end as WAddr)
-                                as Addr;
+                                as Addr,
+                        );
                     }
-                    if self.selected_addr_changed {
-                        self.focus_on_selected_addr(ui);
-                    }
+                }
+
+                if self.selected_addr_changed {
+                    self.focus_on_selected_addr(ui);
                 }
 
                 let layout = self.layout.as_ref().unwrap();
 
-                {
-                    let scrollbar_start_screen_x =
-                        win_pos[0] + layout.ascii_end_scrollbar_start_win_x;
-                    let scrollbar_height = ui.window_size()[1];
-                    let mut grab_height = (win_height_int.div_into_f32(layout.data_height_int)
-                        * scrollbar_height)
-                        .max(layout.scrollbar_size);
-                    let grab_start = win_pos[1]
-                        + (scrollbar_height - grab_height).max(0.0)
-                            * self.data_scroll.div_into_f32(scroll_max_int);
-                    let grab_end = (grab_start + grab_height).min(win_pos[1] + scrollbar_height);
-                    grab_height = grab_end - grab_start;
-                    let draw_list = ui.get_window_draw_list();
-                    if ui.is_mouse_released(MouseButton::Left) {
-                        self.grabbing_scrollbar = false;
-                    }
-                    let hovered = ui.is_window_hovered()
-                        && (scrollbar_start_screen_x
-                            ..scrollbar_start_screen_x + layout.scrollbar_size)
-                            .contains(&mouse_pos[0])
-                        && (win_pos[1]..=win_pos[1] + scrollbar_height).contains(&mouse_pos[1]);
-                    let mut process_grab = self.grabbing_scrollbar;
-                    if hovered && ui.is_mouse_clicked(MouseButton::Left) {
-                        self.grabbing_scrollbar = true;
-                        process_grab = if (grab_start..grab_end).contains(&mouse_pos[1]) {
-                            true
-                        } else {
-                            let new_scroll_ratio =
-                                ((mouse_pos[1] - win_pos[1] - grab_height * 0.5)
-                                    / (scrollbar_height - grab_height))
-                                    .clamp(0.0, 1.0);
-                            self.data_scroll = scroll_max_int * new_scroll_ratio;
-                            false
-                        };
-                        self.grab_start_y = mouse_pos[1];
-                        self.grab_start_scroll = self.data_scroll;
-                    };
-                    if process_grab {
-                        let delta =
-                            (mouse_pos[1] - self.grab_start_y) / (scrollbar_height - grab_height);
-                        self.data_scroll = (self.grab_start_scroll.as_signed()
-                            + scroll_max_int.as_signed() * SignedYPos::from(delta))
-                        .min(scroll_max_int.as_signed())
-                        .max(SignedYPos(0))
-                        .as_unsigned();
-                    }
-                    let grab_style_color = if self.grabbing_scrollbar {
-                        StyleColor::ScrollbarGrabActive
-                    } else if hovered {
-                        StyleColor::ScrollbarGrabHovered
-                    } else {
-                        StyleColor::ScrollbarGrab
-                    };
-                    draw_list
-                        .add_rect(
-                            [scrollbar_start_screen_x, win_pos[1]],
-                            [
-                                scrollbar_start_screen_x + layout.scrollbar_size,
-                                win_pos[1] + scrollbar_height,
-                            ],
-                            ui.style_color(StyleColor::ScrollbarBg),
-                        )
-                        .filled(true)
-                        .build();
-                    draw_list
-                        .add_rect(
-                            [scrollbar_start_screen_x, grab_start],
-                            [scrollbar_start_screen_x + layout.scrollbar_size, grab_end],
-                            ui.style_color(grab_style_color),
-                        )
-                        .filled(true)
-                        .rounding(layout.scrollbar_size * 0.5)
-                        .build();
-                }
+                self.scrollbar.draw(
+                    ui,
+                    win_pos[0] + layout.ascii_end_scrollbar_start_win_x,
+                    win_pos[1],
+                    layout.scrollbar_size,
+                    ui.window_size()[1],
+                    mouse_pos,
+                    win_height_int.div_into_f32(layout.data_height_int),
+                    scroll_max_int,
+                );
 
                 if self.flags.contains(Flags::SHOW_ASCII) {
                     {
@@ -690,23 +611,23 @@ impl MemoryEditor {
                 }
 
                 let scroll_offset_y_int =
-                    self.data_scroll % layout.data_row_height_with_spacing_int;
+                    self.scrollbar.scroll % layout.data_row_height_with_spacing_int;
                 let scroll_offset_y = f32::from(scroll_offset_y_int);
                 let content_start_y = win_pos[1] - scroll_offset_y;
 
                 self.visible_data_rows = (
-                    self.data_scroll
+                    self.scrollbar
+                        .scroll
                         .div_into_int(layout.data_row_height_with_spacing_int)
                         as Addr,
-                    (self.data_scroll + scroll_offset_y_int + win_height_int)
+                    (self.scrollbar.scroll + scroll_offset_y_int + win_height_int)
                         .div_into_int(layout.data_row_height_with_spacing_int)
                         .min((layout.total_rows - 1) as YPosRaw) as Addr,
                 )
                     .into();
-                self.visible_bytes_per_row = layout.bytes_per_row;
 
                 let mut cur_base_addr =
-                    self.addr_range.start + self.visible_data_rows.start * layout.bytes_per_row;
+                    self.addr_range.start + self.visible_data_rows.start * self.bytes_per_row;
                 for rel_row in 0..=self.visible_data_rows.end - self.visible_data_rows.start {
                     let row_start_screen_y =
                         content_start_y + rel_row as f32 * layout.data_row_height_with_spacing;
@@ -861,18 +782,21 @@ impl MemoryEditor {
                     .build(ui, &mut cols)
                 {
                     invalidate_layout = true;
+                    self.cols = NonZeroU8::new(cols.max(1)).unwrap();
+                    self.bytes_per_row = self.calc_bytes_per_row();
                 }
-                self.cols = NonZeroU8::new(cols.max(1)).unwrap();
 
                 ui.same_line();
+
                 let mut col_size = self.col_size.get();
                 if Drag::new("##col_size")
                     .display_format("Col size: %d")
                     .build(ui, &mut col_size)
                 {
                     invalidate_layout = true;
+                    self.col_size = NonZeroU8::new(col_size.max(1)).unwrap();
+                    self.bytes_per_row = self.calc_bytes_per_row();
                 }
-                self.col_size = NonZeroU8::new(col_size.max(1)).unwrap();
 
                 ui.checkbox_flags("Gray out zeros", &mut self.flags, Flags::GRAY_OUT_ZEROS);
                 ui.checkbox_flags("Uppercase hex", &mut self.flags, Flags::UPPERCASE_HEX);
@@ -941,8 +865,7 @@ impl MemoryEditor {
             .build()
         {
             if let Ok(addr) = Addr::from_str_radix(&self.addr_input, 16) {
-                self.selected_addr = addr.clamp(self.addr_range.start, self.addr_range.end);
-                self.selected_addr_changed = true;
+                self.set_selected_addr(addr);
             }
         };
 
