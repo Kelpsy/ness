@@ -241,8 +241,7 @@ impl MemoryEditor {
                         .end
                         .saturating_add(context_rows)
                         .saturating_mul(self.bytes_per_row)
-                        + self.bytes_per_row
-                        - 1,
+                        .saturating_add(self.bytes_per_row - 1),
                 )
                 .min(self.addr_range.end),
         )
